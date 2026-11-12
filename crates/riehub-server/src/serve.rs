@@ -1,7 +1,6 @@
 //! The serve loop: bind per config, announce `SystemStart` to the
 //! audit log, shut down gracefully on SIGTERM and SIGINT.
 
-use crate::cli::open_store;
 use crate::http::{build_router, RouterInput};
 use crate::routes;
 use riehub_audit::event::{Actor, AuditAction, AuditEvent, Event, Outcome};
@@ -10,6 +9,7 @@ use riehub_core::clock::Clock;
 use riehub_core::config::Config;
 use riehub_core::error::Result;
 use riehub_store::sqlite::SqliteStore;
+use riehub_store::Store;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -40,8 +40,8 @@ pub struct Server {
 }
 
 pub async fn assemble(config: Config) -> Result<Server> {
-    let store = Arc::new(open_store(None).await?);
-    // migrate happens in open_store
+    let store = Arc::new(riehub_store::open(&config.database.url).await?);
+    store.migrate().await?;
     let key = riehub_audit::AuditChainMac::new(crate::cli::load_audit_key(&config)?);
     let audit = Arc::new(AuditLog::new(store.clone(), key));
     Ok(Server {

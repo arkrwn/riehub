@@ -16,7 +16,7 @@ proof column names that tree. The plan behind the rows is the
 | T-0006 | Store trait and SQLite backend | 0.0.1 | done | 2026-11-12, make gate green on tree 8cd8118767ba |
 | T-0007 | Audit log | 0.0.1 | done | 2026-11-12, make gate green on tree 13d36dc21b77 |
 | T-0008 | HTTP server skeleton | 0.0.1 | done | 2026-11-12, make gate green on tree 6e7b3921de37 |
-| T-0009 | Privacy canary harness | 0.0.1 | todo | |
+| T-0009 | Privacy canary harness | 0.0.1 | done | 2026-11-12, make gate green on tree 9fc2494241dc |
 | T-0099 | Release 0.0.1 | 0.0.1 | todo | |
 | T-0101 | Per-user vault on cofferak-core | 0.1.0 | todo | |
 | T-0102 | Instance coffer and host seals | 0.1.0 | todo | |

@@ -97,9 +97,9 @@ fn ensure_file_private(path: &str) -> Result<()> {
             }
             Ok(())
         }
-        Err(_) => Err(Error::Invalid(
-            "database file: the parent directory is not writable".to_owned(),
-        )),
+        Err(e) => Err(Error::Invalid(format!(
+            "database file: create failed for {path}: {e}"
+        ))),
     }
 }
 
