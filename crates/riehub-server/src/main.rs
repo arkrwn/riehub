@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod cli;
+
 use riehub_core::Config;
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -16,13 +18,14 @@ enum Command {
     Version,
     Serve { config: Option<PathBuf> },
     Doctor,
+    Audit(cli::AuditArgs),
 }
 
 fn usage() -> ExitCode {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(
         err,
-        "usage: riehub [version] | serve [--config <path>] | doctor"
+        "usage: riehub [version] | serve [--config <path>] | doctor | audit verify|head|export"
     );
     ExitCode::from(2)
 }
@@ -52,6 +55,7 @@ fn parse_args(args: &[String]) -> Result<Command, ()> {
             }
             Ok(Command::Doctor)
         }
+        Some("audit") => Ok(Command::Audit(cli::parse_audit_args(&args[1..])?)),
         Some(_) => Err(()),
     }
 }
@@ -77,6 +81,13 @@ fn main() -> ExitCode {
         }
         Command::Serve { config } => serve(config),
         Command::Doctor => doctor(),
+        Command::Audit(args) => {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(_) => return ExitCode::FAILURE,
+            };
+            rt.block_on(cli::run_audit(&args))
+        }
     }
 }
 

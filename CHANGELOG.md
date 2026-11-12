@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The audit log in `riehub-audit` and the CLI: typed events without
+  content fields, an HMAC-SHA384 chain over the store, 10 ms batching,
+  verification with tamper detection, plus `riehub audit
+  verify|head|export`.
 - The `Store` trait and the SQLite backend in `riehub-store`: records,
   audit chain, counters, usage, leases, migrations, file mode 0600, and
   the conformance suite behind the `conformance` feature.

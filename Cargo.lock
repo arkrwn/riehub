@@ -975,9 +975,12 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 name = "riehub-audit"
 version = "0.0.1"
 dependencies = [
+ "async-trait",
  "riehub-core",
  "riehub-crypto",
  "riehub-store",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1012,6 +1015,9 @@ dependencies = [
  "riehub-core",
  "riehub-crypto",
  "riehub-store",
+ "serde_json",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]
