@@ -1,7 +1,7 @@
 name: CI
 
-# Runs `make check` (fmt + lint + test + rules) on every push and pull request.
-# Task T-0001 raises this to `make gate`.
+# Runs `make gate` (fmt + lint + test + rules + cargo-deny + strict docs)
+# on every push and pull request (ADR 0003).
 # A pull request merges only when this is green (SDD.md, "CI and toolchain").
 on:
   push:
@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: check (${{ matrix.os }})
+  gate:
+    name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -30,5 +30,17 @@ jobs:
       - name: Install Rust
         run: rustup toolchain install && rustup show
 
-      - name: make check
-        run: make check
+      - name: Install gate tools
+        run: make tools
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: cargo-${{ matrix.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+          restore-keys: cargo-${{ matrix.os }}-
+
+      - name: make gate
+        run: make gate
