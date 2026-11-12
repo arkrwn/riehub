@@ -2,10 +2,18 @@
 
 #![forbid(unsafe_code)]
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn workspace_version_is_wired() {
-        assert_eq!(env!("CARGO_PKG_VERSION"), "0.0.1");
-    }
-}
+pub mod aead;
+pub mod ct;
+pub mod hash;
+pub mod hkdf;
+pub mod key;
+pub mod password;
+pub mod random;
+
+pub use aead::{aead_open, aead_seal};
+pub use ct::ct_eq;
+pub use hash::{hmac, sha384};
+pub use hkdf::{hkdf, info};
+pub use key::Key32;
+pub use password::{argon2id, Argon2Params};
+pub use random::random_bytes;

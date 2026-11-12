@@ -1,0 +1,15 @@
+error[E0080]: evaluation panicked: hkdf info must start with riehub/v1/
+ --> tests/compile_fail/hkdf_info_not_prefixed.rs:3:19
+  |
+3 | const BAD: &str = info("wrong/prefix");
+  |                   ^^^^^^^^^^^^^^^^^^^^ evaluation of `BAD` failed inside this call
+  |
+note: inside `info`
+ --> $RUST/core/src/panic.rs
+  |
+  = note: the failure occurred here
+  |
+ ::: src/hkdf.rs
+  |
+  |             panic!("hkdf info must start with riehub/v1/");
+  |             ---------------------------------------------- in this macro invocation

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Crypto primitives in `riehub-crypto` on aws-lc-rs and argon2:
+  AES-256-GCM-SIV AEAD, HKDF-SHA384 with compile-time checked info
+  prefixes, Argon2id, HMAC-SHA384, SHA-384, random bytes and
+  constant-time compare.
 - Configuration loading in `riehub-core` and the binary: the spec TOML
   with defaults, `RIEHUB_*` env overrides, profile validation, plus
   `riehub serve --config` and `riehub doctor`.
