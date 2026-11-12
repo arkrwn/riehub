@@ -1,0 +1,41 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Secrets never go in the repository
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.cred
+secrets.*
+
+# Docs site build output and its local virtualenv
+site/
+.venv-docs/
+
+# Web UI build output and dependencies
+web/node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/
+
+# Runtime data never goes in the repository
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.cofferak
+*.seal
+
+# Local agent scratch
+.superpowers/
+.claude/settings.local.json
+
+# Stack-specific entries
+/target

@@ -1,0 +1,9 @@
+[package]
+name = "riehub"
+version = "0.0.1"
+edition = "2021"
+description = "One private hub for every AI model, tool, skill and workflow."
+license = "Apache-2.0"
+repository = "https://github.com/arkrwn/riehub"
+
+[dependencies]

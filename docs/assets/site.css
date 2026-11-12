@@ -1,0 +1,30 @@
+/* riehub brand colours (see assets/README.md). */
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #14532D;
+  --md-primary-fg-color--light: color-mix(in srgb, #14532D 80%, white);
+  --md-primary-fg-color--dark: color-mix(in srgb, #14532D 80%, black);
+  --md-accent-fg-color: #A3E635;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: color-mix(in srgb, #14532D 85%, black);
+  --md-accent-fg-color: #A3E635;
+  --md-typeset-a-color: #A3E635;
+}
+.project-hero {
+  text-align: center;
+  margin: 1rem 0 2rem;
+}
+.project-hero img {
+  width: 280px;
+  max-width: 70%;
+}
+[data-md-color-scheme="slate"] .md-typeset .md-button:not(.md-button--primary) {
+  color: #A3E635;
+  border-color: #A3E635;
+}
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary {
+  background-color: #A3E635;
+  border-color: #A3E635;
+  color: #fff;
+}

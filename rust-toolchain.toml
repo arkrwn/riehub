@@ -1,0 +1,5 @@
+# The exact toolchain for local builds and CI. Bump it in its own
+# pull request, with `make gate` green.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]

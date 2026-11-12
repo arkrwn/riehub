@@ -1,0 +1,115 @@
+site_name: riehub
+site_description: One private hub for every AI model, tool, skill and workflow.
+site_url: https://arkrwn.github.io/riehub/
+repo_url: https://github.com/arkrwn/riehub
+repo_name: arkrwn/riehub
+edit_uri: edit/main/docs/
+copyright: Apache License 2.0. The riehub name and logo are covered by the trademark policy.
+docs_dir: docs
+strict: true
+exclude_docs: |
+  requirements.txt
+
+theme:
+  name: material
+  logo: assets/mark-dark.svg
+  favicon: assets/mark.svg
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+extra_css:
+  - assets/site.css
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+# Pages that exist but stay out of the menu.
+not_in_nav: |
+  /assets/README.md
+  /adr/template.md
+
+# Every new page gets a line here (SDD.md, "The documentation site").
+nav:
+  - Home: index.md
+  - Overview: overview.md
+  - Getting started: getting-started.md
+  - Roadmap: ROADMAP.md
+  - Design:
+      - Specification: SPEC.md
+      - Subsystems:
+          - Security and crypto: spec/security.md
+          - Identity: spec/identity.md
+          - Router: spec/router.md
+          - Governance: spec/governance.md
+          - MCP: spec/mcp.md
+          - Automation: spec/automation.md
+          - Storage: spec/storage.md
+          - API and configuration: spec/api.md
+          - Web UI: spec/web.md
+          - Deployment: spec/deploy.md
+      - Decisions (ADRs):
+          - adr/README.md
+          - "0001 Record architecture decisions": adr/0001-record-architecture-decisions.md
+          - "0002 Rust, one binary, Linux and macOS only": adr/0002-rust-single-binary-linux-macos.md
+          - "0003 A software factory with a gate-owned progress record": adr/0003-software-factory.md
+          - "0004 Operators manage metadata, users hold the keys": adr/0004-privacy-model.md
+          - "0005 Per-user vaults built on cofferak-core": adr/0005-user-vault-on-cofferak.md
+          - "0006 One record-shaped store trait, four databases": adr/0006-storage-trait-and-backends.md
+          - "0007 A canonical request model between surfaces and providers": adr/0007-canonical-request-model.md
+          - "0008 Connection auth types, and where sign-in is allowed": adr/0008-connection-auth-types.md
+          - "0009 MCP connectors are remote first": adr/0009-mcp-remote-first.md
+          - "0010 A typed, keyed, hash-chained audit log without content": adr/0010-audit-log.md
+          - "0011 Web UI stack and design system": adr/0011-web-ui-stack.md
+          - "0012 Stateless nodes over a shared database": adr/0012-stateless-nodes.md
+          - "0013 Unattended runs need an explicit standing grant": adr/0013-standing-grants.md
+          - "0014 Plugins are WebAssembly with explicit capabilities": adr/0014-wasm-plugins.md
+          - "0015 Port 8080 for development, 443 with native TLS for production": adr/0015-ports-tls-and-tunnel.md
+  - Development:
+      - development.md
+      - Progress: PROGRESS.md
