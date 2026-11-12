@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-11-12
+
 ### Added
 
 - The HTTP server skeleton on axum: the static route table with
@@ -40,3 +42,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rules lint.
 
 [Unreleased]: https://github.com/arkrwn/riehub/commits/main
+[0.0.1]: https://github.com/arkrwn/riehub/commits/main
