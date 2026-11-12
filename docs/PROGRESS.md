@@ -13,7 +13,7 @@ proof column names that tree. The plan behind the rows is the
 | T-0003 | Core types: ids, Secret, Content, errors, clock | 0.0.1 | done | 2026-11-12, make gate green on tree d33630e044a1 |
 | T-0004 | Configuration loading | 0.0.1 | done | 2026-11-12, make gate green on tree 10b59810003a |
 | T-0005 | Crypto primitives | 0.0.1 | done | 2026-11-12, make gate green on tree a494b7a069a0 |
-| T-0006 | Store trait and SQLite backend | 0.0.1 | todo | |
+| T-0006 | Store trait and SQLite backend | 0.0.1 | done | 2026-11-12, make gate green on tree 8cd8118767ba |
 | T-0007 | Audit log | 0.0.1 | todo | |
 | T-0008 | HTTP server skeleton | 0.0.1 | todo | |
 | T-0009 | Privacy canary harness | 0.0.1 | todo | |

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The `Store` trait and the SQLite backend in `riehub-store`: records,
+  audit chain, counters, usage, leases, migrations, file mode 0600, and
+  the conformance suite behind the `conformance` feature.
 - Crypto primitives in `riehub-crypto` on aws-lc-rs and argon2:
   AES-256-GCM-SIV AEAD, HKDF-SHA384 with compile-time checked info
   prefixes, Argon2id, HMAC-SHA384, SHA-384, random bytes and

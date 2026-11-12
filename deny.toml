@@ -8,7 +8,15 @@ no-default-features = false
 # vulnerabilities always emit errors in cargo-deny 0.18+, no field needed
 unmaintained = "all"
 yanked = "deny"
-ignore = []
+ignore = [
+    # libsqlite3-sys 0.37 is pinned by sqlx 0.9.0, which has no release
+    # bundling SQLite 3.54 yet. The exposure needs a local attacker who
+    # can write the database file and its -wal sidecar, which the 0600
+    # database file mode, the 0600 refusal on open, and the production
+    # data directory mode check all block. Remove this entry when sqlx
+    # bumps libsqlite3-sys to 0.39 or later.
+    { id = "RUSTSEC-2026-0459", reason = "no patched version is reachable through sqlx 0.9.0, the local-write attack path is closed by the store file mode rules" },
+]
 
 [licenses]
 allow = [
