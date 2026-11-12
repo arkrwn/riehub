@@ -6,19 +6,25 @@
 riehub/
   AGENTS.md          # entry point for AI agents (CLAUDE.md -> AGENTS.md)
   SDD.md             # the design and documentation practice this repo follows
-  README.md          # what it is, the status, links
+  README.md          # what it is, the status, the quickstart, links
   CHANGELOG.md       # user-visible changes per release
   Makefile           # build, fmt, lint, test, rules, check, security, docs, gate
   mkdocs.yml         # docs site config and nav
+  deny.toml          # the cargo-deny policy the gate enforces
   factory/           # task cards, the loop driver, the progress record, reviews
   scripts/           # rules-lint.sh, security.sh, install-tools.sh
   docs/              # SPEC.md, spec/, adr/, ROADMAP.md, PROGRESS.md, guides, assets/
-  src/               # seed binary, replaced by the workspace in task T-0002
+  crates/            # the Rust workspace:
+    riehub-core      #   ids, errors, config, Secret<T>, Content, clock
+    riehub-crypto    #   AEAD, KDFs, hashing, random, constant-time compare
+    riehub-store     #   the Store trait and the SQLite backend
+    riehub-audit     #   typed, hash-chained audit log
+    riehub-server    #   the `riehub` binary: HTTP, CLI, wiring
   .github/           # CI, docs deploy, PR and issue templates
 ```
 
-The Rust workspace under `crates/`, the web UI under `web/` and the
-deployment files under `deploy/` are created by their tasks. The crate
+The web UI under `web/`, the deployment files under `deploy/` and the
+remaining workspace crates are created by their tasks. The crate
 boundaries are fixed in the
 [specification](SPEC.md#31-crates-and-their-boundaries).
 
