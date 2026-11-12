@@ -22,6 +22,7 @@ print_stdout = "deny"
 print_stderr = "deny"
 
 [workspace.dependencies]
+cofferak-core = { git = "https://github.com/arkrwn/cofferak", rev = "ad45409e113838e67ea9b80052dd2330dc7aa101" }
 riehub-core = { path = "crates/riehub-core", version = "0.0.1" }
 riehub-crypto = { path = "crates/riehub-crypto", version = "0.0.1" }
 riehub-store = { path = "crates/riehub-store", version = "0.0.1" }

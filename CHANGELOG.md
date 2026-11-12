@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The per-user vault in `riehub-vault` on cofferak-core: unlock
+  slots from secrets the user presents, recovery keys, ACL-scoped
+  entries, content keys for encrypted records, generation compare-and-swap
+  with the `vault.write` audit event, and rollback refusal.
+
 ## [0.0.1] - 2026-11-12
 
 ### Added

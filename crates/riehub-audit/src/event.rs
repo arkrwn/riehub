@@ -35,6 +35,7 @@ pub enum AuditAction {
     SystemStart,
     ConfigLoad,
     AuditPrune,
+    VaultWrite,
 }
 
 impl AuditAction {
@@ -43,6 +44,7 @@ impl AuditAction {
             AuditAction::SystemStart => "system.start",
             AuditAction::ConfigLoad => "config.load",
             AuditAction::AuditPrune => "audit.prune",
+            AuditAction::VaultWrite => "vault.write",
         }
     }
 
@@ -51,6 +53,7 @@ impl AuditAction {
             "system.start" => Some(AuditAction::SystemStart),
             "config.load" => Some(AuditAction::ConfigLoad),
             "audit.prune" => Some(AuditAction::AuditPrune),
+            "vault.write" => Some(AuditAction::VaultWrite),
             _ => None,
         }
     }
@@ -102,6 +105,7 @@ pub enum AuditEvent {
     SystemStart {},
     ConfigLoad { profile: Profile },
     AuditPrune { through_seq: u64, last_mac: Mac },
+    VaultWrite { user: UserId, generation: u64 },
 }
 
 impl AuditEvent {
@@ -127,6 +131,10 @@ impl AuditEvent {
             } => {
                 out.extend_from_slice(&through_seq.to_le_bytes());
                 out.extend_from_slice(last_mac);
+            }
+            AuditEvent::VaultWrite { user, generation } => {
+                out.extend_from_slice(user.as_str().as_bytes());
+                out.extend_from_slice(&generation.to_le_bytes());
             }
         }
         out
@@ -157,6 +165,13 @@ impl AuditEvent {
                 );
                 map.insert("last_mac".to_owned(), mac_array);
             }
+            AuditEvent::VaultWrite { user, generation } => {
+                map.insert(
+                    "user".to_owned(),
+                    serde_json::Value::String(user.to_string()),
+                );
+                map.insert("generation".to_owned(), serde_json::json!(generation));
+            }
         }
         serde_json::Value::Object(map)
     }
@@ -167,6 +182,7 @@ fn action_tag(action: AuditAction) -> u8 {
         AuditAction::SystemStart => 1,
         AuditAction::ConfigLoad => 2,
         AuditAction::AuditPrune => 3,
+        AuditAction::VaultWrite => 4,
     }
 }
 
@@ -339,6 +355,19 @@ mod tests {
                     last_mac: [7u8; 48],
                 },
             },
+            Event {
+                ts: 4,
+                actor: Actor::User(id.clone()),
+                action: AuditAction::VaultWrite,
+                outcome: Outcome::Ok,
+                request_id: None,
+                target: Some(Target::User(id.clone())),
+                ip: None,
+                event: AuditEvent::VaultWrite {
+                    user: id.clone(),
+                    generation: 9,
+                },
+            },
         ];
 
         let known = [
@@ -350,6 +379,7 @@ mod tests {
             "system.start",
             "config.load",
             "audit.prune",
+            "vault.write",
             "dev",
             "production",
         ];
@@ -371,7 +401,10 @@ mod tests {
                         _ => false,
                     })
                     .unwrap_or(false)
-                    || riehub_core::RequestId::parse(s).is_ok();
+                    || riehub_core::RequestId::parse(s).is_ok()
+                    || riehub_core::UserId::parse(s).is_ok()
+                    || riehub_core::HubKeyId::parse(s).is_ok()
+                    || riehub_core::ConnectionId::parse(s).is_ok();
                 assert!(
                     parses_as_id || known.contains(&s.as_str()),
                     "unexpected free string in the audit event: {s}"
