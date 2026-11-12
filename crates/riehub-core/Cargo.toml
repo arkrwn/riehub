@@ -10,7 +10,8 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
-serde = "1.0.229"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.1"
 ulid = "3.0.0"
 zeroize = "1.9.1"
 

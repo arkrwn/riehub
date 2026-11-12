@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod clock;
+pub mod config;
 pub mod content;
 pub mod error;
 pub mod ids;
@@ -10,6 +11,11 @@ pub mod owner;
 pub mod secret;
 
 pub use clock::{Clock, SystemClock, TestClock};
+pub use config::{
+    AuditConfig, AuditIp, Config, DataConfig, DatabaseConfig, EgressConfig, IdentityConfig,
+    InstanceConfig, LogConfig, LogFormat, McpConfig, Profile, Seal, ServerConfig, Signup,
+    TlsConfig, TlsMode,
+};
 pub use content::Content;
 pub use error::{Error, Result};
 pub use ids::{ConnectionId, HubKeyId, RequestId, SessionId, UserId};

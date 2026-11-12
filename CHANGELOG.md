@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Configuration loading in `riehub-core` and the binary: the spec TOML
+  with defaults, `RIEHUB_*` env overrides, profile validation, plus
+  `riehub serve --config` and `riehub doctor`.
 - Core types in `riehub-core`: typed ids (`<prefix>_<ULID>`), `Secret<T>`
   and `Content` that never leak through `Debug`, `Display` or `Serialize`,
   the eight-class `Error`, `Clock` with a test double, and `Owner`.
