@@ -68,7 +68,7 @@ mode `0600`.
 ```
 
 The server binds `127.0.0.1:8080` (the dev default) and logs JSON
-lines to stdout. Stop it with `Ctrl-C`; in-flight requests finish
+lines to stdout. Stop it with `Ctrl-C`, and in-flight requests finish
 first.
 
 ## 4. Health
