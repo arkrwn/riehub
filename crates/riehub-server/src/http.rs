@@ -79,9 +79,36 @@ impl Default for RouterInput {
     }
 }
 
+/// Matches a request against the route table, `{param}` segments
+/// wildcard. Returns the spec and the route template.
+pub fn match_route(
+    method: &Method,
+    path: &str,
+    table: &'static [crate::routes::RouteSpec],
+) -> Option<(&'static crate::routes::RouteSpec, &'static str)> {
+    for spec in table {
+        if spec.method != method && !(method == Method::HEAD && spec.method == Method::GET) {
+            continue;
+        }
+        let pattern: Vec<&str> = spec.path.split('/').collect();
+        let actual: Vec<&str> = path.split('/').collect();
+        if pattern.len() != actual.len() {
+            continue;
+        }
+        let matched = pattern
+            .iter()
+            .zip(actual.iter())
+            .all(|(p, a)| p.starts_with('{') || p == a);
+        if matched {
+            return Some((spec, spec.path));
+        }
+    }
+    None
+}
+
 /// Builds the router from the table and nothing else (api spec,
-/// section 2). Middleware order: request id, body and header limits,
-/// timeout, security headers, access log.
+/// section 2). Middleware order: route classes, csrf, request id, body
+/// and header limits, timeout, security headers, access log.
 pub fn build_router(input: RouterInput, table: &'static [RouteSpec]) -> Router {
     let templates: Arc<Vec<(&'static Method, &'static str)>> =
         Arc::new(table.iter().map(|spec| (spec.method, spec.path)).collect());
@@ -121,6 +148,10 @@ pub fn build_router(input: RouterInput, table: &'static [RouteSpec]) -> Router {
         .layer(DefaultBodyLimit::max(state.0.body_limit))
         .layer(
             ServiceBuilder::new()
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    route_class_mw,
+                ))
                 .layer(middleware::from_fn_with_state(state.clone(), csrf_mw))
                 .layer(middleware::from_fn(request_id_mw))
                 .layer(middleware::from_fn_with_state(
@@ -220,6 +251,58 @@ async fn fallback_404(State(state): State<AppState>, req: Request) -> Response {
     );
     let _ = state;
     response
+}
+
+/// The route class middleware (api spec, section 2): one place
+/// decides, from the route table, what every route demands.
+/// - `Public`: nothing.
+/// - `Self_`: a session cookie, 401 without one.
+/// - `AdminMeta`: a session with the admin role, 401 or 403.
+/// - `Key` and `Hook`: the handler enforces its credential; no route
+///   of those classes exists yet.
+async fn route_class_mw(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let path = req.uri().path();
+    let spec =
+        crate::http::match_route(req.method(), path, crate::routes::TABLE).map(|(spec, _)| spec);
+    let Some(spec) = spec else {
+        return next.run(req).await;
+    };
+    let class = spec.class;
+    let wants_session = matches!(
+        class,
+        crate::routes::RouteClass::Self_ | crate::routes::RouteClass::AdminMeta
+    );
+    if !wants_session {
+        return next.run(req).await;
+    }
+    let Some(token) = session_cookie(&req, &state) else {
+        return problem_response(
+            &Error::Unauthorized("a session is required".to_owned()),
+            None,
+        );
+    };
+    let Some(identity) = &state.0.identity else {
+        return problem_response(
+            &Error::Unavailable("the store is not ready".to_owned()),
+            None,
+        );
+    };
+    let session = match identity.validate_session(&token).await {
+        Ok(session) => session,
+        Err(_) => {
+            return problem_response(
+                &Error::Unauthorized("the session is not valid".to_owned()),
+                None,
+            )
+        }
+    };
+    if class == crate::routes::RouteClass::AdminMeta && !session.auth_user.is_admin() {
+        return problem_response(
+            &Error::Forbidden("this needs the admin role".to_owned()),
+            None,
+        );
+    }
+    next.run(req).await
 }
 
 /// State-changing /api requests that carry a session cookie need the
@@ -351,7 +434,7 @@ async fn security_headers_mw(req: Request, next: Next) -> Response {
 
 /// The access log carries only the allowlisted fields (api spec,
 /// section 1). Never the path with ids, the query string or headers.
-async fn access_log_mw(State(state): State<AppState>, req: Request, next: Next) -> Response {
+async fn access_log_mw(State(_state): State<AppState>, req: Request, next: Next) -> Response {
     let started = Instant::now();
     let method = req.method().clone();
     let path = req.uri().path().to_owned();
@@ -363,12 +446,8 @@ async fn access_log_mw(State(state): State<AppState>, req: Request, next: Next) 
 
     let response = next.run(req).await;
 
-    let template = state
-        .0
-        .route_templates
-        .iter()
-        .find(|(m, p)| *m == method && *p == path)
-        .map(|(_, p)| *p)
+    let template = crate::http::match_route(&method, &path, crate::routes::TABLE)
+        .map(|(_, template)| template)
         .unwrap_or("<unmatched>");
     let status = response.status().as_u16();
     let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(0);

@@ -6,7 +6,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod admin;
+pub mod invite;
+
+pub use roles::AdminSafe;
 pub mod password;
+pub mod roles;
 pub mod session;
 
 use riehub_audit::event::{
@@ -84,7 +89,7 @@ impl AuthKind {
 }
 
 /// The stored per-user credential: salt, Argon2 parameters, verifier.
-struct Credential {
+pub(crate) struct Credential {
     salt: [u8; 16],
     m_kib: u32,
     t: u32,
@@ -365,6 +370,37 @@ impl Service {
         Ok(!listed.items.is_empty())
     }
 
+    /// The status string of one user's record, None if the record is
+    /// gone.
+    pub async fn user_record_status(&self, user_id: &UserId) -> Result<Option<String>> {
+        let record = self
+            .store
+            .get(&Owner::Instance, Kind::User, user_id.as_str())
+            .await?;
+        Ok(record.and_then(|r| r.status))
+    }
+
+    /// The roles of one user, from the instance-owned user record.
+    pub async fn roles_of(&self, user_id: &UserId) -> Result<Vec<crate::roles::Role>> {
+        let record = self
+            .store
+            .get(&Owner::Instance, Kind::User, user_id.as_str())
+            .await?;
+        match record {
+            None => Ok(vec![crate::roles::Role::Member]),
+            Some(record) => Ok(record
+                .meta
+                .get("roles")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().and_then(crate::roles::Role::parse))
+                        .collect()
+                })
+                .unwrap_or_default()),
+        }
+    }
+
     pub async fn user_by_email(&self, email: &str) -> Result<Option<User>> {
         let record = self
             .store
@@ -394,7 +430,7 @@ impl Service {
     /// and its credential. Returns the armored recovery key, shown
     /// once.
     #[allow(clippy::too_many_arguments)]
-    async fn make_user(
+    pub(crate) async fn make_user(
         &self,
         email: &str,
         password: &Secret<String>,
@@ -473,7 +509,7 @@ impl Service {
         Ok(())
     }
 
-    async fn audit_event(
+    pub(crate) async fn audit_event(
         &self,
         actor: Actor,
         action: AuditAction,
@@ -519,16 +555,16 @@ fn ip_key(ip: &str) -> CounterKey {
 }
 
 /// The slot key: `hkdf(m, riehub/v1/pw/slot)` (security spec, 3.2).
-fn pw_slot_key(m: &riehub_crypto::Key32) -> riehub_crypto::Key32 {
+pub(crate) fn pw_slot_key(m: &riehub_crypto::Key32) -> riehub_crypto::Key32 {
     hkdf(m.expose(), PW_SLOT_INFO)
 }
 
 /// The stored verifier: `hkdf(m, riehub/v1/pw/auth)`.
-fn pw_verifier(m: &riehub_crypto::Key32) -> [u8; 32] {
+pub(crate) fn pw_verifier(m: &riehub_crypto::Key32) -> [u8; 32] {
     *hkdf(m.expose(), PW_AUTH_INFO).expose()
 }
 
-fn encode_credential(c: &Credential) -> Vec<u8> {
+pub(crate) fn encode_credential(c: &Credential) -> Vec<u8> {
     let mut out = Vec::with_capacity(16 + 12 + 32);
     out.extend_from_slice(&c.salt);
     out.extend_from_slice(&c.m_kib.to_le_bytes());
@@ -558,7 +594,7 @@ fn decode_credential(data: &[u8]) -> Option<Credential> {
     })
 }
 
-fn normalize_email(email: &str) -> Result<String> {
+pub(crate) fn normalize_email(email: &str) -> Result<String> {
     let trimmed = email.trim().to_lowercase();
     if trimmed.is_empty() || trimmed.len() > 254 || !trimmed.contains('@') {
         return Err(Error::Invalid("email: not a usable address".to_owned()));
@@ -566,7 +602,7 @@ fn normalize_email(email: &str) -> Result<String> {
     Ok(trimmed)
 }
 
-fn user_from_record(record: &Record) -> Result<User> {
+pub(crate) fn user_from_record(record: &Record) -> Result<User> {
     let id = UserId::parse(&record.id)?;
     let email = record.lookup.clone().ok_or_else(|| Error::Internal(None))?;
     let meta = record

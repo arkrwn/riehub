@@ -37,13 +37,26 @@ pub struct Session {
     pub csrf_token: String,
 }
 
-/// A validated session, ready to touch the vault.
+/// A validated session: the `AuthUser` handlers use. Ready to touch
+/// the vault.
 #[allow(missing_debug_implementations)]
 pub struct AuthedSession {
-    pub user_id: UserId,
-    pub session_id: String,
-    pub sid: String,
-    pub unlocked: Arc<riehub_vault::Unlocked>,
+    pub auth_user: crate::roles::AuthUser,
+}
+
+impl std::ops::Deref for AuthedSession {
+    type Target = crate::roles::AuthUser;
+    fn deref(&self) -> &crate::roles::AuthUser {
+        &self.auth_user
+    }
+}
+
+impl AuthedSession {
+    /// The bare sid of this session, for the csrf token and the slot
+    /// name.
+    pub fn sid(&self) -> &str {
+        self.session_id.trim_start_matches("sess_")
+    }
 }
 
 #[allow(missing_debug_implementations)]
@@ -291,11 +304,24 @@ impl Service {
                 .await;
         }
 
+        // A disabled user never holds a working session, even one
+        // created before the disable (defense in depth).
+        match self.user_record_status(&user_id).await {
+            Ok(Some(status)) if status == "active" => {}
+            Ok(_) => {
+                self.delete_session_record(&sid).await?;
+                return Err(Error::Forbidden("this account is disabled".to_owned()));
+            }
+            Err(_) => {}
+        }
+        let roles = self.roles_of(&user_id).await.unwrap_or_default();
         Ok(AuthedSession {
-            user_id,
-            session_id: record.id.clone(),
-            sid,
-            unlocked,
+            auth_user: crate::roles::AuthUser {
+                user_id,
+                roles,
+                session_id: record.id.clone(),
+                unlocked,
+            },
         })
     }
 

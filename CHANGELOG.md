@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Roles, route classes and user administration in `riehub-identity`
+  and the API: the owner/admin/member roles with the permission enum,
+  the class middleware driven by the route table, the admin user
+  routes with the last-owner protection, one-time invites with the
+  72-hour expiry, and the `UserScope` built only from an `AuthUser`.
 - Web sessions in `riehub-identity` and the API: the `rs_<SID>_<secret>`
   token and cookie, CSRF enforcement on cookie-carrying requests, idle
   and absolute timeouts, the ten-session cap, the in-memory unlock

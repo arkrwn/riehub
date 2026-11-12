@@ -105,6 +105,62 @@ pub static TABLE: &[RouteSpec] = &[
         timeout: None,
         handler: |state, req| Box::pin(handlers::end_session(state, req)),
     },
+    RouteSpec {
+        method: &Method::GET,
+        path: "/api/v1/admin/users",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_list_users(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/admin/users",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_create_user(state, req)),
+    },
+    RouteSpec {
+        method: &Method::PATCH,
+        path: "/api/v1/admin/users/{id}",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_patch_user(state, req)),
+    },
+    RouteSpec {
+        method: &Method::DELETE,
+        path: "/api/v1/admin/users/{id}",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_delete_user(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/admin/invites",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_create_invite(state, req)),
+    },
+    RouteSpec {
+        method: &Method::GET,
+        path: "/api/v1/admin/audit",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_audit(state, req)),
+    },
+    RouteSpec {
+        method: &Method::GET,
+        path: "/api/v1/invites/{token}",
+        class: RouteClass::Public,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::invite_info(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/invites/{token}",
+        class: RouteClass::Public,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::accept_invite(state, req)),
+    },
 ];
 
 pub mod handlers {
@@ -192,7 +248,7 @@ pub mod handlers {
         let csrf = state
             .0
             .cookie_key
-            .map(|key| riehub_identity::session::csrf_token(&key, &session.sid))
+            .map(|key| riehub_identity::session::csrf_token(&key, session.sid()))
             .unwrap_or_default();
         (
             StatusCode::OK,
@@ -215,7 +271,7 @@ pub mod handlers {
             Err(response) => return *response,
         };
         match identity
-            .end_session(&session.user_id, &session.sid, &session.unlocked)
+            .end_session(&session.user_id, session.sid(), &session.unlocked)
             .await
         {
             Ok(()) => {
@@ -277,6 +333,230 @@ pub mod handlers {
             .await
         {
             Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    /// The admin user list response. It implements `AdminSafe` by
+    /// hand: its fields are ids, emails, names, statuses and roles
+    /// only, never `Content` or `Secret`. No Debug, by the marker
+    /// trait's own rule.
+    #[allow(missing_debug_implementations)]
+    pub struct AdminUserList {
+        pub items: Vec<serde_json::Value>,
+    }
+
+    impl riehub_identity::AdminSafe for AdminUserList {}
+
+    pub async fn admin_list_users(state: AppState, req: Request) -> Response {
+        use riehub_store::Store;
+        let session = match require_session(&state, cookie_of(&req)).await {
+            Ok(session) => session,
+            Err(response) => return *response,
+        };
+        let _ = session;
+        let Some(store) = &state.0.store else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let mut items = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = store
+                .list(
+                    &riehub_core::Owner::Instance,
+                    riehub_store::record::Kind::User,
+                    &Default::default(),
+                    &riehub_store::record::Page {
+                        after: cursor.clone(),
+                        limit: 200,
+                    },
+                )
+                .await;
+            let page = match page {
+                Ok(page) => page,
+                Err(_) => break,
+            };
+            for record in &page.items {
+                items.push(serde_json::json!({
+                    "id": record.id,
+                    "email": record.lookup,
+                    "display_name": record.meta.get("display_name"),
+                    "status": record.status,
+                    "roles": record.meta.get("roles"),
+                }));
+            }
+            match page.next {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        (StatusCode::OK, Json(serde_json::json!({ "items": items }))).into_response()
+    }
+
+    pub async fn admin_create_user(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let _ = require_session(&state, cookie_of(&req)).await;
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let Some(email) = field(&body, "email").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("email: the field is required".to_owned()),
+                None,
+            );
+        };
+        let display_name = field(&body, "display_name").map(str::to_owned);
+        match identity
+            .create_invite(&email, display_name.as_deref())
+            .await
+        {
+            Ok((user, token)) => (
+                StatusCode::OK,
+                Json(json!({
+                    "user_id": user.id.to_string(),
+                    "invite_token": token,
+                })),
+            )
+                .into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn admin_patch_user(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let admin = match require_session(&state, cookie_of(&req)).await {
+            Ok(session) => session,
+            Err(response) => return *response,
+        };
+        let target = req.uri().path().rsplit('/').next().unwrap_or("").to_owned();
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let patch = riehub_identity::admin::UserPatch {
+            roles: body.get("roles").and_then(|v| v.as_array()).map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            }),
+            status: body
+                .get("status")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned),
+        };
+        match identity.patch_user(&admin.auth_user, &target, &patch).await {
+            Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn admin_delete_user(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let admin = match require_session(&state, cookie_of(&req)).await {
+            Ok(session) => session,
+            Err(response) => return *response,
+        };
+        let target = req.uri().path().rsplit('/').next().unwrap_or("").to_owned();
+        match identity.delete_user(&admin.auth_user, &target).await {
+            Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn admin_create_invite(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let _ = require_session(&state, cookie_of(&req)).await;
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let Some(email) = field(&body, "email").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("email: the field is required".to_owned()),
+                None,
+            );
+        };
+        let display_name = field(&body, "display_name").map(str::to_owned);
+        match identity
+            .create_invite(&email, display_name.as_deref())
+            .await
+        {
+            Ok((_user, token)) => {
+                (StatusCode::OK, Json(json!({"invite_token": token}))).into_response()
+            }
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn admin_audit(state: AppState, req: Request) -> Response {
+        use riehub_store::Store;
+        let _ = require_session(&state, cookie_of(&req)).await;
+        let Some(store) = &state.0.store else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let rows = store
+            .audit_read(1, 200, &riehub_store::audit::AuditFilter::default())
+            .await
+            .unwrap_or_default();
+        let items: Vec<serde_json::Value> = rows
+            .iter()
+            .map(|row| {
+                serde_json::json!({
+                    "seq": row.seq,
+                    "ts": row.ts,
+                    "kind": row.kind,
+                    "event": row.event,
+                })
+            })
+            .collect();
+        (StatusCode::OK, Json(json!({"items": items}))).into_response()
+    }
+
+    pub async fn invite_info(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let token = req.uri().path().rsplit('/').next().unwrap_or("");
+        match identity.invite_by_token(token).await {
+            Ok(invite) => (
+                StatusCode::OK,
+                Json(json!({"email": invite.email, "expires_at": invite.expires_at})),
+            )
+                .into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn accept_invite(state: AppState, req: Request) -> Response {
+        use crate::http::SetupResponse;
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let token = req.uri().path().rsplit('/').next().unwrap_or("").to_owned();
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let Some(password) = field(&body, "password").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("password: the field is required".to_owned()),
+                None,
+            );
+        };
+        let password = riehub_core::Secret::new(password);
+        match identity.accept_invite(&token, &password).await {
+            Ok((user_id, armored)) => {
+                SetupResponse::new(user_id.to_string(), armored).into_response()
+            }
             Err(e) => problem_response(&e, None),
         }
     }
