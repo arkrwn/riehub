@@ -88,6 +88,54 @@ pub async fn open_store(config_path: Option<&Path>) -> Result<riehub_store::sqli
     Ok(store)
 }
 
+/// The audit key for the config's data directory.
+pub fn load_audit_key(config: &Config) -> Result<riehub_crypto::Key32> {
+    riehub_audit::KeySource::load(&FileKeySource::new(&config.data.dir))
+}
+
+/// `riehub init`: creates the data directory with mode 0700 and runs
+/// the migrations (api spec, section 4).
+pub fn run_init(config_path: Option<&Path>) -> ExitCode {
+    match init_with(config_path) {
+        Ok(()) => {
+            print_line("riehub init ok");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            print_error(&e.to_string());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn init_with(config_path: Option<&Path>) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let config = Config::load(config_path)?;
+    config.validate()?;
+    let dir = Path::new(&config.data.dir);
+    match std::fs::metadata(dir) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => {
+            return Err(riehub_core::Error::Invalid(
+                "data.dir: the path exists but is not a directory".to_owned(),
+            ))
+        }
+        Err(_) => std::fs::create_dir(dir).map_err(|_| {
+            riehub_core::Error::Invalid("data.dir: the directory is not creatable".to_owned())
+        })?,
+    }
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(|_| {
+        riehub_core::Error::Invalid("data.dir: the mode is not settable".to_owned())
+    })?;
+    // The store needs the runtime for its async open.
+    let rt = tokio::runtime::Runtime::new().map_err(|_| riehub_core::Error::Internal(None))?;
+    rt.block_on(async move {
+        let store = riehub_store::open(&config.database.url).await?;
+        store.migrate().await?;
+        Ok(())
+    })
+}
+
 pub fn print_line(text: &str) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{text}");
@@ -96,6 +144,12 @@ pub fn print_line(text: &str) {
 pub fn print_error(text: &str) {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(err, "{text}");
+}
+
+/// Prints an error and returns the failure exit code.
+pub fn exit_with(e: &riehub_core::Error) -> ExitCode {
+    print_error(&e.to_string());
+    ExitCode::FAILURE
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -160,9 +214,7 @@ pub async fn run_audit(args: &AuditArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    use riehub_audit::KeySource;
-    let key_source = FileKeySource::new(&config.data.dir);
-    let key = match key_source.load() {
+    let key = match load_audit_key(&config) {
         Ok(k) => k,
         Err(e) => {
             print_error(&e.to_string());

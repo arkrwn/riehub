@@ -2,9 +2,8 @@
 
 #![forbid(unsafe_code)]
 
-pub mod cli;
-
 use riehub_core::Config;
+use riehub_server::{cli, harden, serve};
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -16,6 +15,7 @@ pub fn version_line() -> String {
 
 enum Command {
     Version,
+    Init { config: Option<PathBuf> },
     Serve { config: Option<PathBuf> },
     Doctor,
     Audit(cli::AuditArgs),
@@ -25,7 +25,7 @@ fn usage() -> ExitCode {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(
         err,
-        "usage: riehub [version] | serve [--config <path>] | doctor | audit verify|head|export"
+        "usage: riehub [version] | init [--config <path>] | serve [--config <path>] | doctor | audit verify|head|export"
     );
     ExitCode::from(2)
 }
@@ -34,19 +34,12 @@ fn parse_args(args: &[String]) -> Result<Command, ()> {
     match args.first().map(String::as_str) {
         None => Ok(Command::Version),
         Some("version") => Ok(Command::Version),
+        Some("init") => {
+            let config = parse_config_flag(&args[1..])?;
+            Ok(Command::Init { config })
+        }
         Some("serve") => {
-            let mut config = None;
-            let mut rest = &args[1..];
-            while let Some((flag, tail)) = rest.split_first() {
-                match flag.as_str() {
-                    "--config" => {
-                        let (value, more) = tail.split_first().ok_or(())?;
-                        config = Some(PathBuf::from(value));
-                        rest = more;
-                    }
-                    _ => return Err(()),
-                }
-            }
+            let config = parse_config_flag(&args[1..])?;
             Ok(Command::Serve { config })
         }
         Some("doctor") => {
@@ -60,7 +53,26 @@ fn parse_args(args: &[String]) -> Result<Command, ()> {
     }
 }
 
+fn parse_config_flag(args: &[String]) -> Result<Option<PathBuf>, ()> {
+    let mut config = None;
+    let mut rest = args;
+    while let Some((flag, tail)) = rest.split_first() {
+        match flag.as_str() {
+            "--config" => {
+                let (value, more) = tail.split_first().ok_or(())?;
+                config = Some(PathBuf::from(value));
+                rest = more;
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(config)
+}
+
 fn main() -> ExitCode {
+    // Process hardening happens first (security spec, section 7).
+    harden::harden();
+
     // print_stdout is denied workspace-wide, so output goes through
     // io::Write instead of println!.
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -79,7 +91,27 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         }
-        Command::Serve { config } => serve(config),
+        Command::Init { config } => cli::run_init(config.as_deref()),
+        Command::Serve { config } => {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(_) => return ExitCode::FAILURE,
+            };
+            rt.block_on(async move {
+                let config = match Config::load(config.as_deref()) {
+                    Ok(c) => c,
+                    Err(e) => return cli::exit_with(&e),
+                };
+                serve::init_tracing(&config.log.level);
+                match serve::assemble(config).await {
+                    Ok(server) => match serve::run(server).await {
+                        Ok(()) => ExitCode::SUCCESS,
+                        Err(e) => cli::exit_with(&e),
+                    },
+                    Err(e) => cli::exit_with(&e),
+                }
+            })
+        }
         Command::Doctor => doctor(),
         Command::Audit(args) => {
             let rt = match tokio::runtime::Runtime::new() {
@@ -89,19 +121,6 @@ fn main() -> ExitCode {
             rt.block_on(cli::run_audit(&args))
         }
     }
-}
-
-fn serve(config_path: Option<PathBuf>) -> ExitCode {
-    let config = match Config::load(config_path.as_deref()) {
-        Ok(config) => config,
-        Err(e) => return report(&e, 1),
-    };
-    if let Err(e) = config.validate() {
-        return report(&e, 1);
-    }
-    let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "config ok (profile: {})", config.profile.as_str());
-    ExitCode::SUCCESS
 }
 
 fn doctor() -> ExitCode {
@@ -247,12 +266,6 @@ fn key_file_mode_open(path: &str) -> bool {
 #[cfg(not(unix))]
 fn key_file_mode_open(_path: &str) -> bool {
     false
-}
-
-fn report(e: &riehub_core::Error, code: u8) -> ExitCode {
-    let mut err = std::io::stderr().lock();
-    let _ = writeln!(err, "{e}");
-    ExitCode::from(code)
 }
 
 #[cfg(test)]

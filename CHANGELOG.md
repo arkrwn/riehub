@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The HTTP server skeleton on axum: the static route table with
+  classes, middleware (request id, limits, timeout, security headers,
+  allowlisted access log), problem json errors, process hardening,
+  `riehub init`, graceful `riehub serve` with the `SystemStart` audit
+  event, and tracing JSON output.
 - The audit log in `riehub-audit` and the CLI: typed events without
   content fields, an HMAC-SHA384 chain over the store, 10 ms batching,
   verification with tamper detection, plus `riehub audit
