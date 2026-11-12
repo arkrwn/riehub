@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod password;
+pub mod session;
 
 use riehub_audit::event::{
     Actor, AuditAction, AuditEvent, Event, LoginFailReason, Outcome, Target, ThrottleScope,
@@ -20,6 +21,7 @@ use riehub_store::sqlite::SqliteStore;
 use riehub_store::{CounterKey, Store};
 use riehub_vault::{self as vault, VaultAudit};
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const ARGON2_CONCURRENCY: usize = 4;
@@ -27,7 +29,8 @@ const ARGON2_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 const THROTTLE_WINDOW_MS: i64 = 900_000; // 15 minutes
 const ACCOUNT_FAIL_LIMIT: i64 = 5;
 const IP_FAIL_LIMIT: i64 = 20;
-const VERIFIER_INFO: &str = "riehub/v1/login/verifier";
+const PW_SLOT_INFO: &str = "riehub/v1/pw/slot";
+const PW_AUTH_INFO: &str = "riehub/v1/pw/auth";
 const DUMMY_SALT: [u8; 16] = [0x5a; 16];
 
 /// One user of the hub (identity spec, section 1).
@@ -97,6 +100,9 @@ pub struct Service {
     store: Arc<SqliteStore>,
     audit: Arc<riehub_audit::AuditLog<SqliteStore>>,
     argon: Arc<Semaphore>,
+    cache: Arc<Mutex<std::collections::HashMap<String, session::CacheEntry>>>,
+    clock: Arc<dyn Clock>,
+    test_clock: Option<Arc<riehub_core::TestClock>>,
 }
 
 impl Service {
@@ -105,7 +111,17 @@ impl Service {
             store,
             audit,
             argon: Arc::new(Semaphore::new(ARGON2_CONCURRENCY)),
+            cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            clock: Arc::new(riehub_core::SystemClock),
+            test_clock: None,
         }
+    }
+
+    /// Swaps in a test clock for the session timeouts. Tests only.
+    pub fn with_test_clock(mut self, clock: Arc<riehub_core::TestClock>) -> Self {
+        self.clock = clock.clone();
+        self.test_clock = Some(clock);
+        self
     }
 
     /// One Argon2 slot. At most four run at once; the rest wait up to
@@ -147,19 +163,18 @@ impl Service {
         (account, ip_fails, retry_after)
     }
 
-    async fn count_failure(&self, email: &str, ip: Option<&str>) {
+    async fn count_failure(&self, email: &str, ip: Option<&str>) -> Result<()> {
         let now = SystemClock.now_millis();
         let (window, window_end) = Self::window(now);
-        let _ = self
-            .store
+        self.store
             .counter_add(&account_key(email), window, 1, window_end)
-            .await;
+            .await?;
         if let Some(ip) = ip {
-            let _ = self
-                .store
+            self.store
                 .counter_add(&ip_key(ip), window, 1, window_end)
-                .await;
+                .await?;
         }
+        Ok(())
     }
 
     /// Creates the first user with the owner role. Works only while
@@ -201,7 +216,8 @@ impl Service {
         email: &Secret<String>,
         password: &Secret<String>,
         ip: Option<&str>,
-    ) -> Result<UserId> {
+        cookie_key: &[u8; 32],
+    ) -> Result<(UserId, session::Session)> {
         let email_raw = normalize_email(email.expose())?;
         let now = SystemClock.now_millis();
         let (window, _end) = Self::window(now);
@@ -255,7 +271,7 @@ impl Service {
                 &DUMMY_SALT,
                 riehub_crypto::Argon2Params::DEFAULT,
             );
-            self.count_failure(&email_raw, ip).await;
+            self.count_failure(&email_raw, ip).await?;
             self.audit_event(
                 Actor::Anonymous,
                 AuditAction::LoginFailed,
@@ -270,7 +286,7 @@ impl Service {
         };
 
         let credential = self.load_credential(&user.id).await?;
-        let pw_key = riehub_crypto::argon2id(
+        let pw_material = riehub_crypto::argon2id(
             password.expose().as_bytes(),
             &credential.salt,
             riehub_crypto::Argon2Params {
@@ -279,9 +295,10 @@ impl Service {
                 p: credential.p,
             },
         );
-        let computed = verifier(&pw_key);
+        let pw_key = pw_slot_key(&pw_material);
+        let computed = pw_verifier(&pw_material);
         if !riehub_crypto::ct_eq(&computed, &credential.verifier) {
-            self.count_failure(&email_raw, ip).await;
+            self.count_failure(&email_raw, ip).await?;
             self.audit_event(
                 Actor::User(user.id.clone()),
                 AuditAction::LoginFailed,
@@ -308,12 +325,16 @@ impl Service {
             return Err(Error::Forbidden("this account is disabled".to_owned()));
         }
 
-        // Unlock the vault through the pw slot.
+        // Unlock the vault through the pw slot, then create the
+        // session: slot `ws.<SID>`, session record, cookie token.
         let stored = vault::load(self.store.as_ref(), &user.id).await?;
         let Some(stored) = stored else {
             return Err(Error::Internal(None));
         };
-        vault::unlock(&stored, "pw", pw_key.expose(), self).await?;
+        let unlocked = Arc::new(vault::unlock(&stored, "pw", pw_key.expose(), self).await?);
+        let session = self
+            .create_session(&user.id, &stored, unlocked, cookie_key)
+            .await?;
 
         self.audit_event(
             Actor::User(user.id.clone()),
@@ -325,7 +346,7 @@ impl Service {
             },
         )
         .await?;
-        Ok(user.id)
+        Ok((user.id, session))
     }
 
     async fn any_user(&self) -> Result<bool> {
@@ -383,8 +404,9 @@ impl Service {
         let user_id = UserId::new();
         let salt: [u8; 16] = random_bytes::<16>();
         let params = riehub_crypto::Argon2Params::DEFAULT;
-        let pw_key = riehub_crypto::argon2id(password.expose().as_bytes(), &salt, params);
-        let verifier = verifier(&pw_key);
+        let pw_material = riehub_crypto::argon2id(password.expose().as_bytes(), &salt, params);
+        let pw_key = pw_slot_key(&pw_material);
+        let verifier = pw_verifier(&pw_material);
 
         let (vault, recovery) = vault::create(user_id.clone(), ("pw", pw_key.expose()))?;
         let armored = recovery.private.to_armored().as_str().to_owned();
@@ -496,9 +518,14 @@ fn ip_key(ip: &str) -> CounterKey {
     CounterKey::new(Owner::Instance, format!("login:ip:{}", counter_tag(ip)))
 }
 
-fn verifier(pw_key: &riehub_crypto::Key32) -> [u8; 32] {
-    let derived = hkdf(pw_key.expose(), VERIFIER_INFO);
-    *derived.expose()
+/// The slot key: `hkdf(m, riehub/v1/pw/slot)` (security spec, 3.2).
+fn pw_slot_key(m: &riehub_crypto::Key32) -> riehub_crypto::Key32 {
+    hkdf(m.expose(), PW_SLOT_INFO)
+}
+
+/// The stored verifier: `hkdf(m, riehub/v1/pw/auth)`.
+fn pw_verifier(m: &riehub_crypto::Key32) -> [u8; 32] {
+    *hkdf(m.expose(), PW_AUTH_INFO).expose()
 }
 
 fn encode_credential(c: &Credential) -> Vec<u8> {

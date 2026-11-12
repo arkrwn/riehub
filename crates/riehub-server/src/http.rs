@@ -30,6 +30,7 @@ impl std::fmt::Debug for InnerState {
         f.debug_struct("InnerState")
             .field("store", &self.store.is_some())
             .field("identity", &self.identity.is_some())
+            .field("cookie_key", &self.cookie_key.is_some())
             .field("timeout", &self.timeout)
             .field("body_limit", &self.body_limit)
             .field("header_limit", &self.header_limit)
@@ -40,6 +41,9 @@ impl std::fmt::Debug for InnerState {
 pub struct InnerState {
     pub store: Option<Arc<SqliteStore>>,
     pub identity: Option<Arc<riehub_identity::Service>>,
+    pub cookie_key: Option<[u8; 32]>,
+    pub cookie_name: &'static str,
+    pub cookie_secure: bool,
     pub timeout: Duration,
     pub body_limit: usize,
     pub header_limit: usize,
@@ -52,6 +56,9 @@ pub struct InnerState {
 pub struct RouterInput {
     pub store: Option<Arc<SqliteStore>>,
     pub audit: Option<Arc<riehub_audit::AuditLog<SqliteStore>>>,
+    pub cookie_key: Option<[u8; 32]>,
+    pub cookie_name: &'static str,
+    pub cookie_secure: bool,
     pub timeout: Duration,
     pub body_limit: usize,
     pub header_limit: usize,
@@ -62,6 +69,9 @@ impl Default for RouterInput {
         Self {
             store: None,
             audit: None,
+            cookie_key: None,
+            cookie_name: "__Host-rs",
+            cookie_secure: true,
             timeout: DEFAULT_TIMEOUT,
             body_limit: DEFAULT_BODY_LIMIT,
             header_limit: DEFAULT_HEADER_LIMIT,
@@ -85,6 +95,9 @@ pub fn build_router(input: RouterInput, table: &'static [RouteSpec]) -> Router {
     let state = AppState(Arc::new(InnerState {
         store: input.store,
         identity,
+        cookie_key: input.cookie_key,
+        cookie_name: input.cookie_name,
+        cookie_secure: input.cookie_secure,
         timeout: input.timeout,
         body_limit: input.body_limit,
         header_limit: input.header_limit,
@@ -108,6 +121,7 @@ pub fn build_router(input: RouterInput, table: &'static [RouteSpec]) -> Router {
         .layer(DefaultBodyLimit::max(state.0.body_limit))
         .layer(
             ServiceBuilder::new()
+                .layer(middleware::from_fn_with_state(state.clone(), csrf_mw))
                 .layer(middleware::from_fn(request_id_mw))
                 .layer(middleware::from_fn_with_state(
                     state.clone(),
@@ -206,6 +220,58 @@ async fn fallback_404(State(state): State<AppState>, req: Request) -> Response {
     );
     let _ = state;
     response
+}
+
+/// State-changing /api requests that carry a session cookie need the
+/// `x-csrf-token` header (security spec, section 7). The token is
+/// `hmac(cookie_key, sid)`; GET /api/v1/me hands it out.
+async fn csrf_mw(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let path = req.uri().path();
+    let method = req.method();
+    let mutating = !(method == Method::GET || method == Method::HEAD || method == Method::OPTIONS);
+    let cookie = session_cookie(&req, &state);
+    if mutating && path.starts_with("/api") {
+        if let Some(sid) = cookie.as_ref().and_then(|token| sid_of(token)) {
+            if let Some(key) = &state.0.cookie_key {
+                let expected = riehub_identity::session::csrf_token(key, &sid);
+                let provided = req
+                    .headers()
+                    .get("x-csrf-token")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                if provided != expected {
+                    return problem_response(
+                        &Error::Forbidden("the csrf token does not match".to_owned()),
+                        None,
+                    );
+                }
+            }
+        }
+    }
+    next.run(req).await
+}
+
+/// The session cookie value, whatever name the profile uses.
+fn session_cookie(req: &Request, state: &AppState) -> Option<String> {
+    let header = req.headers().get(header::COOKIE)?.to_str().ok()?;
+    for pair in header.split(';') {
+        let (name, value) = pair.trim().split_once('=')?;
+        if name == state.0.cookie_name || name == riehub_identity::session::COOKIE_NAME_HOST {
+            return Some(value.to_owned());
+        }
+    }
+    None
+}
+
+/// The sid between the token prefixes. The base64url secret may hold
+/// dashes, so split at most twice.
+fn sid_of(token: &str) -> Option<String> {
+    let parts: Vec<&str> = token.splitn(3, '_').collect();
+    if parts.len() == 3 && parts[0] == "rs" {
+        Some(parts[1].to_owned())
+    } else {
+        None
+    }
 }
 
 /// Generates a fresh request id and echoes it on the response.

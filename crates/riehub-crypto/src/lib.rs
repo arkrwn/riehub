@@ -16,4 +16,4 @@ pub use hash::{hmac, sha384};
 pub use hkdf::{hkdf, info};
 pub use key::Key32;
 pub use password::{argon2id, Argon2Params};
-pub use random::random_bytes;
+pub use random::{base64url, base64url_decode, random_bytes};

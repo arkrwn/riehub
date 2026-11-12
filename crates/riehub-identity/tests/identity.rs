@@ -33,6 +33,8 @@ async fn service(tag: &str) -> (Arc<Service>, Arc<SqliteStore>) {
     (Arc::new(Service::new(store.clone(), audit)), store)
 }
 
+const COOKIE_KEY: &[u8; 32] = &[0u8; 32];
+
 fn pw(s: &str) -> Secret<String> {
     Secret::new(s.to_owned())
 }
@@ -86,8 +88,13 @@ async fn login_ok_with_correct_password() {
         .setup_owner("u@example.com", &pw("a-very-good-passphrase-42"), None)
         .await
         .unwrap();
-    let user_id = service
-        .login(&pw("u@example.com"), &pw("a-very-good-passphrase-42"), None)
+    let (user_id, _session) = service
+        .login(
+            &pw("u@example.com"),
+            &pw("a-very-good-passphrase-42"),
+            None,
+            COOKIE_KEY,
+        )
         .await
         .unwrap();
     assert!(!user_id.as_str().is_empty());
@@ -105,10 +112,16 @@ async fn login_unknown_email_and_wrong_password_give_same_status_and_body() {
             &pw("ghost@example.com"),
             &pw("a-very-good-passphrase-42"),
             None,
+            COOKIE_KEY,
         )
         .await;
     let wrong = service
-        .login(&pw("u@example.com"), &pw("totally-different-pass-1"), None)
+        .login(
+            &pw("u@example.com"),
+            &pw("totally-different-pass-1"),
+            None,
+            COOKIE_KEY,
+        )
         .await;
     let (su, sw) = (unknown.err().unwrap(), wrong.err().unwrap());
     assert_eq!(su.to_string(), sw.to_string(), "the error text must match");
@@ -121,15 +134,25 @@ async fn login_is_throttled_after_5_failures() {
     // Five failures put the account over the limit.
     for _ in 0..5 {
         let _ = service
-            .login(&email, &pw("totally-different-pass-1"), Some("10.0.0.9"))
+            .login(
+                &email,
+                &pw("totally-different-pass-1"),
+                Some("10.0.0.9"),
+                COOKIE_KEY,
+            )
             .await;
     }
     let result = service
-        .login(&email, &pw("totally-different-pass-1"), Some("10.0.0.9"))
+        .login(
+            &email,
+            &pw("totally-different-pass-1"),
+            Some("10.0.0.9"),
+            COOKIE_KEY,
+        )
         .await;
     assert!(
         matches!(result, Err(riehub_core::Error::RateLimited(_))),
-        "the sixth attempt is throttled: {result:?}"
+        "the sixth attempt is throttled"
     );
 }
 
@@ -145,11 +168,11 @@ async fn login_after_throttle_lets_a_correct_password_through_after_window() {
     let email = pw("v@example.com");
     for _ in 0..5 {
         let _ = service
-            .login(&email, &pw("totally-different-pass-1"), None)
+            .login(&email, &pw("totally-different-pass-1"), None, COOKIE_KEY)
             .await;
     }
     let result = service
-        .login(&email, &pw("a-very-good-passphrase-42"), None)
+        .login(&email, &pw("a-very-good-passphrase-42"), None, COOKIE_KEY)
         .await;
     assert!(matches!(result, Err(riehub_core::Error::RateLimited(_))));
 }
@@ -244,11 +267,21 @@ async fn the_audit_log_holds_the_identity_events() {
         .await
         .unwrap();
     let _ = service
-        .login(&pw("e@example.com"), &pw("a-very-good-passphrase-42"), None)
+        .login(
+            &pw("e@example.com"),
+            &pw("a-very-good-passphrase-42"),
+            None,
+            COOKIE_KEY,
+        )
         .await
         .unwrap();
     let _ = service
-        .login(&pw("e@example.com"), &pw("totally-different-pass-1"), None)
+        .login(
+            &pw("e@example.com"),
+            &pw("totally-different-pass-1"),
+            None,
+            COOKIE_KEY,
+        )
         .await;
 
     let rows = store.audit_read(1, 100, &Default::default()).await.unwrap();

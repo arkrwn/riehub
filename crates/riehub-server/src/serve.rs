@@ -37,6 +37,7 @@ pub struct Server {
     pub config: Config,
     pub store: Arc<SqliteStore>,
     pub audit: Arc<AuditLog<SqliteStore>>,
+    pub cookie_key: Option<[u8; 32]>,
 }
 
 pub async fn assemble(config: Config) -> Result<Server> {
@@ -45,6 +46,18 @@ pub async fn assemble(config: Config) -> Result<Server> {
     // The audit key comes from the instance coffer. If the host seal
     // cannot be opened, the server refuses to start (S6).
     let (coffer, unlocked) = crate::cli::open_instance_coffer(&config, &store).await?;
+    let cookie_key = riehub_vault::instance::get_secret(
+        &coffer.file,
+        &unlocked,
+        riehub_vault::instance::COOKIE_KEY_PATH,
+    )?;
+    if cookie_key.len() != 32 {
+        return Err(riehub_core::Error::Invalid(
+            "the cookie key entry must hold 32 bytes".to_owned(),
+        ));
+    }
+    let mut cookie_key_arr = [0u8; 32];
+    cookie_key_arr.copy_from_slice(&cookie_key);
     let bytes = riehub_vault::instance::get_secret(
         &coffer.file,
         &unlocked,
@@ -63,6 +76,7 @@ pub async fn assemble(config: Config) -> Result<Server> {
         config,
         store,
         audit,
+        cookie_key: Some(cookie_key_arr),
     })
 }
 
@@ -83,10 +97,22 @@ pub fn init_tracing(level: &str) {
 
 pub async fn run(server: Server) -> Result<()> {
     announce_start(&server.audit).await?;
+    // The cookie name and Secure flag: dev over plain http drops the
+    // `__Host-` prefix and the Secure flag (identity spec, section 3).
+    let dev_http = server.config.profile == riehub_core::Profile::Dev
+        && server.config.server.public_url.starts_with("http://");
+    let cookie_name = if dev_http {
+        riehub_identity::session::COOKIE_NAME_DEV
+    } else {
+        riehub_identity::session::COOKIE_NAME_HOST
+    };
     let router = build_router(
         RouterInput {
             store: Some(server.store.clone()),
             audit: Some(server.audit.clone()),
+            cookie_key: server.cookie_key,
+            cookie_name,
+            cookie_secure: !dev_http,
             timeout: Duration::from_secs(30),
             body_limit: crate::http::DEFAULT_BODY_LIMIT,
             header_limit: crate::http::DEFAULT_HEADER_LIMIT,

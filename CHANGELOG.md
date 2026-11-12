@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Web sessions in `riehub-identity` and the API: the `rs_<SID>_<secret>`
+  token and cookie, CSRF enforcement on cookie-carrying requests, idle
+  and absolute timeouts, the ten-session cap, the in-memory unlock
+  cache, and the pw slot and verifier derivations from the spec table.
 - Users, setup and password login in `riehub-identity` and the API:
   the owner setup on an empty instance, Argon2id login with dummy
   work for unknown emails, a four-way Argon2 semaphore, store-backed

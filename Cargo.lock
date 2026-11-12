@@ -1309,6 +1309,7 @@ dependencies = [
  "riehub-crypto",
  "riehub-store",
  "riehub-vault",
+ "serde",
  "serde_json",
  "tokio",
  "zeroize",

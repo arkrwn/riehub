@@ -31,7 +31,12 @@ impl TestServer {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
+        Self::start_on(dir)
+    }
 
+    /// Boots the server on an existing data directory, sharing the
+    /// store with any other instance on it (ADR 0012: stateless nodes).
+    pub fn start_on(dir: PathBuf) -> Self {
         // A free loopback port: bind, read the port, release.
         let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = probe.local_addr().unwrap().port();
