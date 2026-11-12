@@ -122,8 +122,8 @@ more readers exist:
 One TOML file, `./riehub.toml` by default, with `RIEHUB_*`
 environment overrides and profile rules. The full reference is in
 [the API spec](api.md#3-configuration). The dev profile binds to
-loopback only; `production` requires TLS or a trusted proxy and an
-`https` public URL.
+loopback only, while `production` requires TLS or a trusted proxy and
+an `https` public URL.
 
 ## 7. Work on it
 
