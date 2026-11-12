@@ -8,6 +8,7 @@ use serde_json::Value;
 pub enum Kind {
     User,
     Vault,
+    Credential,
     Session,
     HubKey,
     Connection,
@@ -25,6 +26,7 @@ impl Kind {
         match self {
             Kind::User => "user",
             Kind::Vault => "vault",
+            Kind::Credential => "credential",
             Kind::Session => "session",
             Kind::HubKey => "hub_key",
             Kind::Connection => "connection",
@@ -42,6 +44,7 @@ impl Kind {
         match s {
             "user" => Ok(Kind::User),
             "vault" => Ok(Kind::Vault),
+            "credential" => Ok(Kind::Credential),
             "session" => Ok(Kind::Session),
             "hub_key" => Ok(Kind::HubKey),
             "connection" => Ok(Kind::Connection),

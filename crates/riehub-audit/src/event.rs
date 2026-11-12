@@ -36,6 +36,10 @@ pub enum AuditAction {
     ConfigLoad,
     AuditPrune,
     VaultWrite,
+    UserCreate,
+    LoginOk,
+    LoginFailed,
+    LoginThrottled,
 }
 
 impl AuditAction {
@@ -45,6 +49,10 @@ impl AuditAction {
             AuditAction::ConfigLoad => "config.load",
             AuditAction::AuditPrune => "audit.prune",
             AuditAction::VaultWrite => "vault.write",
+            AuditAction::UserCreate => "user.create",
+            AuditAction::LoginOk => "login.ok",
+            AuditAction::LoginFailed => "login.failed",
+            AuditAction::LoginThrottled => "login.throttled",
         }
     }
 
@@ -54,6 +62,10 @@ impl AuditAction {
             "config.load" => Some(AuditAction::ConfigLoad),
             "audit.prune" => Some(AuditAction::AuditPrune),
             "vault.write" => Some(AuditAction::VaultWrite),
+            "user.create" => Some(AuditAction::UserCreate),
+            "login.ok" => Some(AuditAction::LoginOk),
+            "login.failed" => Some(AuditAction::LoginFailed),
+            "login.throttled" => Some(AuditAction::LoginThrottled),
             _ => None,
         }
     }
@@ -106,6 +118,25 @@ pub enum AuditEvent {
     ConfigLoad { profile: Profile },
     AuditPrune { through_seq: u64, last_mac: Mac },
     VaultWrite { user: UserId, generation: u64 },
+    UserCreate { user: UserId },
+    LoginOk { user: UserId },
+    LoginFailed { reason: LoginFailReason },
+    LoginThrottled { scope: ThrottleScope },
+}
+
+/// Why a login failed. An enum, never caller text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginFailReason {
+    UnknownEmail,
+    WrongPassword,
+    Disabled,
+}
+
+/// What a throttle hit: the account or the source address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThrottleScope {
+    Account,
+    Ip,
 }
 
 impl AuditEvent {
@@ -135,6 +166,25 @@ impl AuditEvent {
             AuditEvent::VaultWrite { user, generation } => {
                 out.extend_from_slice(user.as_str().as_bytes());
                 out.extend_from_slice(&generation.to_le_bytes());
+            }
+            AuditEvent::UserCreate { user } => {
+                out.extend_from_slice(user.as_str().as_bytes());
+            }
+            AuditEvent::LoginOk { user } => {
+                out.extend_from_slice(user.as_str().as_bytes());
+            }
+            AuditEvent::LoginFailed { reason } => {
+                out.push(match reason {
+                    LoginFailReason::UnknownEmail => 1,
+                    LoginFailReason::WrongPassword => 2,
+                    LoginFailReason::Disabled => 3,
+                });
+            }
+            AuditEvent::LoginThrottled { scope } => {
+                out.push(match scope {
+                    ThrottleScope::Account => 1,
+                    ThrottleScope::Ip => 2,
+                });
             }
         }
         out
@@ -172,6 +222,39 @@ impl AuditEvent {
                 );
                 map.insert("generation".to_owned(), serde_json::json!(generation));
             }
+            AuditEvent::UserCreate { user } => {
+                map.insert(
+                    "user".to_owned(),
+                    serde_json::Value::String(user.to_string()),
+                );
+            }
+            AuditEvent::LoginOk { user } => {
+                map.insert(
+                    "user".to_owned(),
+                    serde_json::Value::String(user.to_string()),
+                );
+            }
+            AuditEvent::LoginFailed { reason } => {
+                let value = match reason {
+                    LoginFailReason::UnknownEmail => "unknown_email",
+                    LoginFailReason::WrongPassword => "wrong_password",
+                    LoginFailReason::Disabled => "disabled",
+                };
+                map.insert(
+                    "reason".to_owned(),
+                    serde_json::Value::String(value.to_owned()),
+                );
+            }
+            AuditEvent::LoginThrottled { scope } => {
+                let value = match scope {
+                    ThrottleScope::Account => "account",
+                    ThrottleScope::Ip => "ip",
+                };
+                map.insert(
+                    "scope".to_owned(),
+                    serde_json::Value::String(value.to_owned()),
+                );
+            }
         }
         serde_json::Value::Object(map)
     }
@@ -183,6 +266,10 @@ fn action_tag(action: AuditAction) -> u8 {
         AuditAction::ConfigLoad => 2,
         AuditAction::AuditPrune => 3,
         AuditAction::VaultWrite => 4,
+        AuditAction::UserCreate => 5,
+        AuditAction::LoginOk => 6,
+        AuditAction::LoginFailed => 7,
+        AuditAction::LoginThrottled => 8,
     }
 }
 

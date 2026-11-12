@@ -91,11 +91,12 @@ pub struct Acl {
 
 /// The audit surface the vault needs. Implemented by the server over
 /// the audit log; tests use a small in-memory sink.
+#[async_trait::async_trait]
 pub trait VaultAudit: Send + Sync {
     /// The newest generation recorded for this user, 0 if none.
-    fn newest_generation(&self, user_id: &UserId) -> Result<u64>;
+    async fn newest_generation(&self, user_id: &UserId) -> Result<u64>;
     /// Appends the `vault.write` event for the new generation.
-    fn vault_write(&self, user_id: &UserId, generation: u64) -> Result<()>;
+    async fn vault_write(&self, user_id: &UserId, generation: u64) -> Result<()>;
 }
 
 /// Creates a fresh vault: new DEK, root wrap for the recovery key,
@@ -126,14 +127,14 @@ pub fn create(user_id: UserId, first_slot: (&str, &SlotKey)) -> Result<(Vault, R
 /// Verifies the MAC and the generation, then unwraps the DEK through
 /// the slot. Refuses a vault older than the newest audited generation
 /// (rollback).
-pub fn unlock(
+pub async fn unlock(
     vault: &Vault,
     slot_id: &str,
     slot_key: &SlotKey,
     audit: &dyn VaultAudit,
 ) -> Result<Unlocked> {
     validate_id("slot", slot_id).map_err(|why| Error::Invalid(format!("slot id: {why}")))?;
-    let anchor = audit.newest_generation(&vault.user_id)?;
+    let anchor = audit.newest_generation(&vault.user_id).await?;
     let wrap = vault
         .file
         .hosts
@@ -408,7 +409,9 @@ pub async fn save(
         let put = store.put(&record, expected_cas).await;
         match put {
             Ok(version) => {
-                audit.vault_write(&vault.user_id, vault.file.generation)?;
+                audit
+                    .vault_write(&vault.user_id, vault.file.generation)
+                    .await?;
                 return Ok(version);
             }
             Err(Error::Conflict(_)) if attempts == 1 => {

@@ -26,4 +26,5 @@ cofferak-core = { git = "https://github.com/arkrwn/cofferak", rev = "ad45409e113
 riehub-core = { path = "crates/riehub-core", version = "0.0.1" }
 riehub-crypto = { path = "crates/riehub-crypto", version = "0.0.1" }
 riehub-store = { path = "crates/riehub-store", version = "0.0.1" }
+riehub-vault = { path = "crates/riehub-vault", version = "0.0.1" }
 riehub-audit = { path = "crates/riehub-audit", version = "0.0.1" }

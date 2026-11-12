@@ -1299,6 +1299,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "riehub-identity"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "cofferak-core",
+ "riehub-audit",
+ "riehub-core",
+ "riehub-crypto",
+ "riehub-store",
+ "riehub-vault",
+ "serde_json",
+ "tokio",
+ "zeroize",
+]
+
+[[package]]
 name = "riehub-server"
 version = "0.0.1"
 dependencies = [
@@ -1307,6 +1323,7 @@ dependencies = [
  "riehub-audit",
  "riehub-core",
  "riehub-crypto",
+ "riehub-identity",
  "riehub-store",
  "riehub-vault",
  "serde_json",
@@ -1332,6 +1349,7 @@ dependencies = [
 name = "riehub-vault"
 version = "0.0.1"
 dependencies = [
+ "async-trait",
  "cofferak-core",
  "riehub-core",
  "riehub-crypto",

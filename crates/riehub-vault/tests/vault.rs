@@ -40,8 +40,9 @@ struct Sink {
     newest: Mutex<BTreeMap<String, u64>>,
 }
 
+#[async_trait::async_trait]
 impl VaultAudit for Sink {
-    fn newest_generation(&self, user_id: &UserId) -> Result<u64> {
+    async fn newest_generation(&self, user_id: &UserId) -> Result<u64> {
         Ok(*self
             .newest
             .lock()
@@ -50,7 +51,7 @@ impl VaultAudit for Sink {
             .unwrap_or(&0))
     }
 
-    fn vault_write(&self, user_id: &UserId, generation: u64) -> Result<()> {
+    async fn vault_write(&self, user_id: &UserId, generation: u64) -> Result<()> {
         self.newest
             .lock()
             .unwrap()
@@ -75,9 +76,9 @@ async fn create_then_unlock_with_slot() {
     let u = user(1);
     let (vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     assert_eq!(unlocked.generation, 1);
-    let wrong_slot = unlock(&vault, "nope", SLOT_PW, &sink);
+    let wrong_slot = unlock(&vault, "nope", SLOT_PW, &sink).await;
     assert!(wrong_slot.is_err());
 }
 
@@ -86,7 +87,7 @@ async fn unlock_with_wrong_key_fails() {
     let u = user(2);
     let (vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let result = unlock(&vault, "pw", SLOT_PW2, &sink);
+    let result = unlock(&vault, "pw", SLOT_PW2, &sink).await;
     assert!(result.is_err(), "a wrong slot key must not unlock");
 }
 
@@ -112,15 +113,15 @@ async fn add_and_remove_slot() {
     let u = user(5);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     add_slot(&mut vault, &unlocked, "pw2", SLOT_PW2).unwrap();
-    let with_new = unlock(&vault, "pw2", SLOT_PW2, &sink).unwrap();
+    let with_new = unlock(&vault, "pw2", SLOT_PW2, &sink).await.unwrap();
     assert!(
         with_new.generation > unlocked.generation,
         "the vault re-sealed"
     );
     remove_slot(&mut vault, &with_new, "pw2").unwrap();
-    let gone = unlock(&vault, "pw2", SLOT_PW2, &sink);
+    let gone = unlock(&vault, "pw2", SLOT_PW2, &sink).await;
     assert!(gone.is_err(), "the removed slot must no longer unlock");
 }
 
@@ -129,11 +130,11 @@ async fn removed_slot_no_longer_unlocks() {
     let u = user(6);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     add_slot(&mut vault, &unlocked, "pw2", SLOT_PW2).unwrap();
-    let with_new = unlock(&vault, "pw2", SLOT_PW2, &sink).unwrap();
+    let with_new = unlock(&vault, "pw2", SLOT_PW2, &sink).await.unwrap();
     remove_slot(&mut vault, &with_new, "pw").unwrap();
-    assert!(unlock(&vault, "pw", SLOT_PW, &sink).is_err());
+    assert!(unlock(&vault, "pw", SLOT_PW, &sink).await.is_err());
 }
 
 #[tokio::test]
@@ -141,7 +142,7 @@ async fn set_get_remove_entry() {
     let u = user(7);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path = EntryKind::path(
         "conn_01ARZ3NDEKTSV4RRFFQ69G5FAV",
         EntryKind::ConnectionCredential,
@@ -171,7 +172,7 @@ async fn entry_over_1mib_is_rejected() {
     let u = user(8);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path = EntryKind::path("conn_big", EntryKind::ConnectionCredential);
     let big = Secret::new(vec![0u8; 1_048_577]);
     let result = set(&mut vault, &unlocked, &path, &big);
@@ -185,7 +186,7 @@ async fn get_outside_acl_is_denied() {
     let u = user(9);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path_a = EntryKind::path("con_A", EntryKind::ConnectionCredential);
     let path_b = EntryKind::path("con_B", EntryKind::ConnectionCredential);
     set(
@@ -221,7 +222,7 @@ async fn tampered_vault_bytes_fail_to_unlock() {
     let u = user(10);
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path = EntryKind::path("con_A", EntryKind::ConnectionCredential);
     set(
         &mut vault,
@@ -237,7 +238,7 @@ async fn tampered_vault_bytes_fail_to_unlock() {
         user_id: u.clone(),
         file: cofferak_core::format::VaultFile::from_bytes(&bytes).unwrap(),
     };
-    let result = unlock(&tampered, "pw", SLOT_PW, &sink);
+    let result = unlock(&tampered, "pw", SLOT_PW, &sink).await;
     assert!(result.is_err(), "tampered vault bytes must fail to unlock");
 }
 
@@ -252,7 +253,7 @@ async fn rolled_back_vault_is_refused() {
 
     // Advance to generation 2, then put the generation 1 bytes back
     // under the newest record version, the way a rollback attack does.
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path = EntryKind::path("con_A", EntryKind::ConnectionCredential);
     set(&mut vault, &unlocked, &path, &Secret::new(b"v2".to_vec())).unwrap();
     save(store.as_ref(), &sink, &vault, 1).await.unwrap();
@@ -271,7 +272,7 @@ async fn rolled_back_vault_is_refused() {
     store.put(&rollback, Expect::Any).await.unwrap();
 
     let loaded = load(store.as_ref(), &u).await.unwrap().unwrap();
-    let refused = unlock(&loaded, "pw", SLOT_PW, &sink);
+    let refused = unlock(&loaded, "pw", SLOT_PW, &sink).await;
     assert!(
         matches!(refused, Err(riehub_core::Error::Conflict(_))),
         "a rolled back vault must be refused"
@@ -323,7 +324,7 @@ async fn record_blob_fails_to_open_for_other_user_or_id_or_version() {
     let u = user(13);
     let (vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
     let sink = Sink::default();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let key = content_key(&unlocked, ContentKind::Chat);
     let blob = seal_record(
         &key,
@@ -390,7 +391,7 @@ async fn stored_vault_bytes_do_not_contain_the_entry_plaintext() {
     let u = user(15);
     let sink = Sink::default();
     let (mut vault, _recovery) = create(u.clone(), ("pw", SLOT_PW)).unwrap();
-    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).unwrap();
+    let unlocked = unlock(&vault, "pw", SLOT_PW, &sink).await.unwrap();
     let path = EntryKind::path("con_A", EntryKind::ConnectionCredential);
     let plaintext = b"RIEHUB-CANARY-plaintext-check";
     set(

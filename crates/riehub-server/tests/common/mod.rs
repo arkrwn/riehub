@@ -2,7 +2,7 @@
 //! capture its output, and scan for privacy canaries (security spec,
 //! section 8).
 
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, dead_code)]
 
 use std::io::{Read, Write as _};
 use std::net::TcpStream;

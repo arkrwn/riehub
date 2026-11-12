@@ -86,6 +86,7 @@ pub async fn run(server: Server) -> Result<()> {
     let router = build_router(
         RouterInput {
             store: Some(server.store.clone()),
+            audit: Some(server.audit.clone()),
             timeout: Duration::from_secs(30),
             body_limit: crate::http::DEFAULT_BODY_LIMIT,
             header_limit: crate::http::DEFAULT_HEADER_LIMIT,

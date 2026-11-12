@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Users, setup and password login in `riehub-identity` and the API:
+  the owner setup on an empty instance, Argon2id login with dummy
+  work for unknown emails, a four-way Argon2 semaphore, store-backed
+  throttling, the embedded common-password list, and the armored
+  recovery key shown once.
 - The instance coffer in `riehub-vault` and the server: host key
   seals behind `instance.seal` (systemd, keychain, file), the audit
   and cookie keys stored inside it, `riehub init` printing the

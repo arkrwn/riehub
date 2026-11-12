@@ -25,9 +25,21 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 #[derive(Clone, Debug)]
 pub struct AppState(pub Arc<InnerState>);
 
-#[derive(Debug)]
+impl std::fmt::Debug for InnerState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InnerState")
+            .field("store", &self.store.is_some())
+            .field("identity", &self.identity.is_some())
+            .field("timeout", &self.timeout)
+            .field("body_limit", &self.body_limit)
+            .field("header_limit", &self.header_limit)
+            .finish()
+    }
+}
+
 pub struct InnerState {
     pub store: Option<Arc<SqliteStore>>,
+    pub identity: Option<Arc<riehub_identity::Service>>,
     pub timeout: Duration,
     pub body_limit: usize,
     pub header_limit: usize,
@@ -39,6 +51,7 @@ pub struct InnerState {
 #[derive(Debug)]
 pub struct RouterInput {
     pub store: Option<Arc<SqliteStore>>,
+    pub audit: Option<Arc<riehub_audit::AuditLog<SqliteStore>>>,
     pub timeout: Duration,
     pub body_limit: usize,
     pub header_limit: usize,
@@ -48,6 +61,7 @@ impl Default for RouterInput {
     fn default() -> Self {
         Self {
             store: None,
+            audit: None,
             timeout: DEFAULT_TIMEOUT,
             body_limit: DEFAULT_BODY_LIMIT,
             header_limit: DEFAULT_HEADER_LIMIT,
@@ -61,8 +75,16 @@ impl Default for RouterInput {
 pub fn build_router(input: RouterInput, table: &'static [RouteSpec]) -> Router {
     let templates: Arc<Vec<(&'static Method, &'static str)>> =
         Arc::new(table.iter().map(|spec| (spec.method, spec.path)).collect());
+    let identity = match (&input.store, &input.audit) {
+        (Some(store), Some(audit)) => Some(Arc::new(riehub_identity::Service::new(
+            store.clone(),
+            audit.clone(),
+        ))),
+        _ => None,
+    };
     let state = AppState(Arc::new(InnerState {
         store: input.store,
+        identity,
         timeout: input.timeout,
         body_limit: input.body_limit,
         header_limit: input.header_limit,
@@ -120,6 +142,16 @@ fn method_route(spec: &'static RouteSpec) -> MethodRouter<AppState> {
 /// Maps riehub errors to problem json (api spec, section 1). The
 /// detail never echoes request content.
 pub fn problem_response(error: &Error, request_id: Option<&str>) -> Response {
+    problem_response_with(error, request_id, &[])
+}
+
+/// A problem json response with extra headers, for example
+/// `Retry-After` on a rate limited login.
+pub fn problem_response_with(
+    error: &Error,
+    request_id: Option<&str>,
+    extra: &[(&'static str, String)],
+) -> Response {
     let (status, title, detail): (StatusCode, &'static str, String) = match error {
         Error::NotFound(m) => (StatusCode::NOT_FOUND, "not found", m.clone()),
         Error::Conflict(m) => (StatusCode::CONFLICT, "conflict", m.clone()),
@@ -146,6 +178,11 @@ pub fn problem_response(error: &Error, request_id: Option<&str>) -> Response {
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/problem+json"),
     );
+    for (name, value) in extra {
+        if let Ok(v) = HeaderValue::from_str(value) {
+            response.headers_mut().insert(*name, v);
+        }
+    }
     response
 }
 
@@ -304,6 +341,39 @@ impl WithStatus for Response {
 
 /// The route classes must all come from the fixed set (api spec,
 /// section 2).
+/// The one response type allowed to carry the armored instance or
+/// user recovery key. It is built only by the setup handler and is
+/// the only place the key leaves the server in plaintext. The body
+/// only leaves through Debug-free json, so no Debug here.
+#[allow(missing_debug_implementations)]
+pub struct SetupResponse {
+    user_id: String,
+    recovery_key: String,
+}
+
+impl SetupResponse {
+    pub fn new(user_id: String, recovery_key: String) -> Self {
+        Self {
+            user_id,
+            recovery_key,
+        }
+    }
+}
+
+impl IntoResponse for SetupResponse {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::OK,
+            Json(json!({
+                "status": "ok",
+                "user_id": self.user_id,
+                "recovery_key": self.recovery_key,
+            })),
+        )
+            .into_response()
+    }
+}
+
 pub fn class_name(class: &RouteClass) -> &'static str {
     match class {
         RouteClass::Public => "public",

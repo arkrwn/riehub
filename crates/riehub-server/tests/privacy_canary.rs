@@ -25,6 +25,15 @@ async fn canary_never_reaches_disk_or_logs() {
 
     // The canary travels in the body, a header, the query string and
     // the path of requests to the routes that exist.
+    // The password surface carries the canary as a credential value;
+    // the email and display name stay synthetic because they are
+    // stored in plain meta by design.
+    let setup_body = format!(
+        "{{\"email\":\"u@example.com\",\"password\":\"{canary}\",\"display_name\":\"Tester\"}}"
+    );
+    let login_body = format!("{{\"email\":\"u@example.com\",\"password\":\"{canary}\"}}");
+    let wrong_login_body = format!("{{\"email\":\"other@example.com\",\"password\":\"{canary}\"}}");
+    let content_type = vec![("content-type", "application/json")];
     let cases: Vec<(&str, &str, Vec<(&str, &str)>, Option<String>)> = vec![
         ("GET", "/healthz?canary={c}", vec![], None),
         ("GET", "/healthz", vec![("x-canary", "{c}")], None),
@@ -32,6 +41,24 @@ async fn canary_never_reaches_disk_or_logs() {
         ("POST", "/healthz", vec![], Some("{c}".to_owned())),
         ("GET", "/{c}", vec![], None),
         ("GET", "/readyz/{c}", vec![], None),
+        (
+            "POST",
+            "/api/v1/setup",
+            content_type.clone(),
+            Some(setup_body),
+        ),
+        (
+            "POST",
+            "/api/v1/auth/login",
+            content_type.clone(),
+            Some(login_body),
+        ),
+        (
+            "POST",
+            "/api/v1/auth/login",
+            content_type,
+            Some(wrong_login_body),
+        ),
     ];
     for (method, target, headers, body) in cases {
         let target = target.replace("{c}", &canary);
@@ -50,7 +77,11 @@ async fn canary_never_reaches_disk_or_logs() {
             .unwrap();
         // The canary never changes what the server answers.
         assert!(
-            status == 200 || status == 404 || status == 405,
+            (200..=299).contains(&status)
+                || status == 400
+                || status == 401
+                || status == 404
+                || status == 405,
             "unexpected status {status} for {method} {target}"
         );
     }
