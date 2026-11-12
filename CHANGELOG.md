@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Core types in `riehub-core`: typed ids (`<prefix>_<ULID>`), `Secret<T>`
+  and `Content` that never leak through `Debug`, `Display` or `Serialize`,
+  the eight-class `Error`, `Clock` with a test double, and `Owner`.
 - Project skeleton: SDD practice, AGENTS.md, ADR log, spec and progress
   table, MkDocs Material documentation site with GitHub Pages deploy, CI.
 - The design: specification with security invariants S1 to S12, ten

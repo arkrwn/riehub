@@ -2,6 +2,20 @@
 
 #![forbid(unsafe_code)]
 
+pub mod clock;
+pub mod content;
+pub mod error;
+pub mod ids;
+pub mod owner;
+pub mod secret;
+
+pub use clock::{Clock, SystemClock, TestClock};
+pub use content::Content;
+pub use error::{Error, Result};
+pub use ids::{ConnectionId, HubKeyId, RequestId, SessionId, UserId};
+pub use owner::Owner;
+pub use secret::Secret;
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
