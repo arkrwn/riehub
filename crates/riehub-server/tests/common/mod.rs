@@ -23,12 +23,17 @@ pub struct TestServer {
 /// loopback port with log level trace. Stops the process on drop.
 impl TestServer {
     pub fn start() -> Self {
+        // A per-call counter plus nanos keeps parallel tests from
+        // colliding on the same data directory.
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let dir = std::env::temp_dir().join(format!(
-            "riehub-e2e-{}",
+            "riehub-e2e-{}-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            seq
         ));
         std::fs::create_dir_all(&dir).unwrap();
         Self::start_on(dir)

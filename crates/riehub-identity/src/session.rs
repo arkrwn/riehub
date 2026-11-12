@@ -7,6 +7,7 @@ use riehub_core::error::{Error, Result};
 use riehub_core::{Owner, UserId};
 use riehub_crypto::hkdf;
 use riehub_store::record::{Expect, Kind, Record};
+use riehub_store::sqlite::SqliteStore;
 use riehub_store::Store;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -290,8 +291,9 @@ impl Service {
                 .ok_or_else(|| Error::Internal(None))?,
         )?;
 
+        let slot_key = SessionCrypto::slot_key(&secret);
         let unlocked = self
-            .unlock_through_cache(user_id.clone(), &sid, &secret, now)
+            .unlock_through_cache(user_id.clone(), &sid, &format!("ws.{sid}"), &slot_key, now)
             .await?;
 
         // Update last seen at most once per minute.
@@ -325,33 +327,32 @@ impl Service {
         })
     }
 
-    async fn unlock_through_cache(
+    pub async fn unlock_through_cache(
         &self,
         user_id: UserId,
-        sid: &str,
-        secret: &[u8; 32],
+        cache_key: &str,
+        slot_name: &str,
+        slot_key: &riehub_crypto::Key32,
         now: i64,
     ) -> Result<Arc<riehub_vault::Unlocked>> {
         {
             let mut cache = self.cache.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(entry) = cache.get_mut(sid) {
+            if let Some(entry) = cache.get_mut(cache_key) {
                 entry.last_used_ms = now;
                 return Ok(entry.unlocked.clone());
             }
         }
-        // Cache miss: unlock the vault through the session slot.
+        // Cache miss: unlock the vault through the token slot.
         let stored = riehub_vault::load(self.store.as_ref(), &user_id)
             .await?
             .ok_or_else(|| Error::Unauthorized("no vault for this user".to_owned()))?;
-        let slot_key = SessionCrypto::slot_key(secret);
-        let unlocked =
-            riehub_vault::unlock(&stored, &format!("ws.{sid}"), slot_key.expose(), self).await?;
+        let unlocked = riehub_vault::unlock(&stored, slot_name, slot_key.expose(), self).await?;
         let unlocked = Arc::new(unlocked);
         let cached = unlocked.clone();
         let mut cache = self.cache.lock().unwrap_or_else(|p| p.into_inner());
         self.evict_cache(&mut cache, now);
         cache.insert(
-            sid.to_owned(),
+            cache_key.to_owned(),
             CacheEntry {
                 unlocked,
                 last_used_ms: now,
@@ -374,6 +375,11 @@ impl Service {
                 None => break,
             }
         }
+    }
+
+    /// The store behind this service, for the CLI readers.
+    pub fn store_ref(&self) -> &SqliteStore {
+        &self.store
     }
 
     /// The unlock cache length, for tests.

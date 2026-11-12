@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Hub keys in `riehub-identity` and the API: the `rh_<ID>_<secret>`
+  token shown once, the three accepted headers, scopes and ACL
+  prefixes, encrypted labels, the Key route class, and manage keys on
+  Self routes without key creation.
 - Roles, route classes and user administration in `riehub-identity`
   and the API: the owner/admin/member roles with the permission enum,
   the class middleware driven by the route table, the admin user

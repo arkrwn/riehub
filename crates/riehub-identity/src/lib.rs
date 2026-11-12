@@ -8,6 +8,7 @@
 
 pub mod admin;
 pub mod invite;
+pub mod keys;
 
 pub use roles::AdminSafe;
 pub mod password;

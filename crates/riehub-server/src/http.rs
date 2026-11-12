@@ -268,41 +268,121 @@ async fn route_class_mw(State(state): State<AppState>, req: Request, next: Next)
         return next.run(req).await;
     };
     let class = spec.class;
-    let wants_session = matches!(
-        class,
-        crate::routes::RouteClass::Self_ | crate::routes::RouteClass::AdminMeta
-    );
-    if !wants_session {
-        return next.run(req).await;
-    }
-    let Some(token) = session_cookie(&req, &state) else {
-        return problem_response(
-            &Error::Unauthorized("a session is required".to_owned()),
-            None,
-        );
-    };
-    let Some(identity) = &state.0.identity else {
-        return problem_response(
-            &Error::Unavailable("the store is not ready".to_owned()),
-            None,
-        );
-    };
-    let session = match identity.validate_session(&token).await {
-        Ok(session) => session,
-        Err(_) => {
+    let identity = match &state.0.identity {
+        Some(identity) => identity,
+        None => {
+            // Public routes work without the store; everything else
+            // fails closed.
+            if matches!(class, crate::routes::RouteClass::Public) {
+                return next.run(req).await;
+            }
             return problem_response(
-                &Error::Unauthorized("the session is not valid".to_owned()),
+                &Error::Unavailable("the store is not ready".to_owned()),
                 None,
-            )
+            );
         }
     };
-    if class == crate::routes::RouteClass::AdminMeta && !session.auth_user.is_admin() {
-        return problem_response(
-            &Error::Forbidden("this needs the admin role".to_owned()),
-            None,
-        );
+    match class {
+        crate::routes::RouteClass::Key(required) => {
+            // A hub key with the right scope; no cookie is needed.
+            let scope = match required {
+                crate::routes::Scope::Ai => riehub_identity::keys::KeyScope::Ai,
+                crate::routes::Scope::Mcp => riehub_identity::keys::KeyScope::Mcp,
+                crate::routes::Scope::Manage => riehub_identity::keys::KeyScope::Manage,
+            };
+            match hub_key_token(&req) {
+                Some(token) => match identity.auth_key(&token, Some(scope)).await {
+                    Ok(_) => next.run(req).await,
+                    Err(e) => {
+                        let status = match &e {
+                            Error::Forbidden(_) => StatusCode::FORBIDDEN,
+                            _ => StatusCode::UNAUTHORIZED,
+                        };
+                        problem_response(&e, None).with_status(status)
+                    }
+                },
+                None => problem_response(
+                    &Error::Unauthorized("a hub key with the right scope is required".to_owned()),
+                    None,
+                ),
+            }
+        }
+        crate::routes::RouteClass::Self_ => {
+            // A session, or a hub key with the manage scope.
+            if let Some(token) = hub_key_token(&req) {
+                return match identity
+                    .auth_key(&token, Some(riehub_identity::keys::KeyScope::Manage))
+                    .await
+                {
+                    Ok(_) => next.run(req).await,
+                    Err(e) => {
+                        let status = match &e {
+                            Error::Forbidden(_) => StatusCode::FORBIDDEN,
+                            _ => StatusCode::UNAUTHORIZED,
+                        };
+                        problem_response(&e, None).with_status(status)
+                    }
+                };
+            }
+            let Some(token) = session_cookie(&req, &state) else {
+                return problem_response(
+                    &Error::Unauthorized("a session is required".to_owned()),
+                    None,
+                );
+            };
+            match identity.validate_session(&token).await {
+                Ok(_) => next.run(req).await,
+                Err(_) => problem_response(
+                    &Error::Unauthorized("the session is not valid".to_owned()),
+                    None,
+                ),
+            }
+        }
+        crate::routes::RouteClass::AdminMeta => {
+            let Some(token) = session_cookie(&req, &state) else {
+                return problem_response(
+                    &Error::Unauthorized("a session is required".to_owned()),
+                    None,
+                );
+            };
+            let session = match identity.validate_session(&token).await {
+                Ok(session) => session,
+                Err(_) => {
+                    return problem_response(
+                        &Error::Unauthorized("the session is not valid".to_owned()),
+                        None,
+                    )
+                }
+            };
+            if !session.auth_user.is_admin() {
+                return problem_response(
+                    &Error::Forbidden("this needs the admin role".to_owned()),
+                    None,
+                );
+            }
+            next.run(req).await
+        }
+        _ => next.run(req).await,
     }
-    next.run(req).await
+}
+
+/// The hub key token from the three accepted headers (identity spec,
+/// section 4).
+fn hub_key_token(req: &Request) -> Option<String> {
+    use axum::http::header;
+    for (name, prefix) in [
+        (header::AUTHORIZATION, "Bearer "),
+        (header::HeaderName::from_static("x-api-key"), ""),
+        (header::HeaderName::from_static("x-goog-api-key"), ""),
+    ] {
+        if let Some(value) = req.headers().get(name).and_then(|v| v.to_str().ok()) {
+            let token = value.strip_prefix(prefix).unwrap_or(value).trim();
+            if token.starts_with("rh_") {
+                return Some(token.to_owned());
+            }
+        }
+    }
+    None
 }
 
 /// State-changing /api requests that carry a session cookie need the

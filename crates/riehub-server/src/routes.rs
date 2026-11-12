@@ -149,6 +149,34 @@ pub static TABLE: &[RouteSpec] = &[
     },
     RouteSpec {
         method: &Method::GET,
+        path: "/api/v1/me/keys",
+        class: RouteClass::Self_,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::my_keys(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/me/keys",
+        class: RouteClass::Self_,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::create_key(state, req)),
+    },
+    RouteSpec {
+        method: &Method::DELETE,
+        path: "/api/v1/me/keys/{id}",
+        class: RouteClass::Self_,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::delete_key(state, req)),
+    },
+    RouteSpec {
+        method: &Method::GET,
+        path: "/v1/models",
+        class: RouteClass::Key(Scope::Ai),
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::list_models(state, req)),
+    },
+    RouteSpec {
+        method: &Method::GET,
         path: "/api/v1/invites/{token}",
         class: RouteClass::Public,
         timeout: None,
@@ -240,22 +268,30 @@ pub mod handlers {
     }
 
     pub async fn me(state: AppState, req: Request) -> Response {
-        let token = cookie_of(&req);
-        let session = match require_session(&state, token).await {
-            Ok(session) => session,
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let caller = match require_caller(&state, session_token, rh_token, None).await {
+            Ok(caller) => caller,
             Err(response) => return *response,
         };
-        let csrf = state
-            .0
-            .cookie_key
-            .map(|key| riehub_identity::session::csrf_token(&key, session.sid()))
-            .unwrap_or_default();
+        let csrf = state.0.cookie_key.map(|key| {
+            riehub_identity::session::csrf_token(
+                &key,
+                caller.auth_user.session_id.trim_start_matches("sess_"),
+            )
+        });
+        let via = if caller.kind == CallerKind::Session {
+            "session"
+        } else {
+            "hub_key"
+        };
         (
             StatusCode::OK,
             Json(json!({
-                "user_id": session.user_id.to_string(),
-                "session_id": session.session_id,
-                "csrf_token": csrf,
+                "user_id": caller.auth_user.user_id.to_string(),
+                "session_id": caller.auth_user.session_id,
+                "csrf_token": csrf.unwrap_or_default(),
+                "via": via,
             })),
         )
             .into_response()
@@ -521,6 +557,148 @@ pub mod handlers {
         (StatusCode::OK, Json(json!({"items": items}))).into_response()
     }
 
+    pub async fn my_keys(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let caller = match require_caller(&state, session_token, rh_token, None).await {
+            Ok(caller) => caller,
+            Err(response) => return *response,
+        };
+        match identity.list_keys(&caller.auth_user.user_id).await {
+            Ok(keys) => (StatusCode::OK, Json(json!({"items": keys}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn create_key(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let caller = match require_caller(&state, session_token, rh_token, None).await {
+            Ok(caller) => caller,
+            Err(response) => return *response,
+        };
+        // Only a session creates keys; a manage key cannot (identity
+        // spec, section 4).
+        if caller.kind == CallerKind::HubKey {
+            return problem_response(
+                &riehub_core::Error::Forbidden("a hub key cannot create keys".to_owned()),
+                None,
+            );
+        }
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let label = field(&body, "label").map(str::to_owned);
+        let scopes: Vec<riehub_identity::keys::KeyScope> = body
+            .get("scopes")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().and_then(riehub_identity::keys::KeyScope::parse))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if scopes.is_empty() {
+            return problem_response(
+                &riehub_core::Error::Invalid("a key needs at least one scope".to_owned()),
+                None,
+            );
+        }
+        let acl_prefixes: Vec<String> = body
+            .get("acl_prefixes")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let expires_at = body.get("expires_at").and_then(|v| v.as_i64());
+
+        // The vault must be unlocked through the session.
+        let Some(store) = state.0.store.as_deref() else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let vault = match riehub_vault::load(store, &caller.auth_user.user_id).await {
+            Ok(Some(vault)) => vault,
+            _ => return problem(StatusCode::SERVICE_UNAVAILABLE),
+        };
+        let unlocked = caller.auth_user.unlocked.clone();
+        match identity
+            .create_key(
+                &caller.auth_user.user_id,
+                &unlocked,
+                &vault,
+                label.as_deref(),
+                &scopes,
+                &acl_prefixes,
+                expires_at,
+            )
+            .await
+        {
+            Ok(new_key) => (
+                StatusCode::OK,
+                Json(json!({
+                    "id": new_key.id,
+                    "token": new_key.token,
+                    "scopes": new_key.scopes,
+                    "acl_prefixes": new_key.acl_prefixes,
+                })),
+            )
+                .into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn delete_key(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let target = req.uri().path().rsplit('/').next().unwrap_or("").to_owned();
+        let caller = match require_caller(&state, session_token, rh_token, None).await {
+            Ok(caller) => caller,
+            Err(response) => return *response,
+        };
+        if caller.kind == CallerKind::HubKey {
+            return problem_response(
+                &riehub_core::Error::Forbidden("a hub key cannot delete keys".to_owned()),
+                None,
+            );
+        }
+        let Some(store) = state.0.store.as_deref() else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let _vault = match riehub_vault::load(store, &caller.auth_user.user_id).await {
+            Ok(Some(vault)) => vault,
+            _ => return problem(StatusCode::SERVICE_UNAVAILABLE),
+        };
+        let unlocked = caller.auth_user.unlocked.clone();
+        match identity
+            .delete_key(&caller.auth_user.user_id, &target, &unlocked)
+            .await
+        {
+            Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn list_models(state: AppState, req: Request) -> Response {
+        let _ = state;
+        let _ = req;
+        // The testable endpoint of the Key(Ai) class; the router task
+        // fills in the real model catalog.
+        (StatusCode::OK, Json(json!({"models": []}))).into_response()
+    }
+
     pub async fn invite_info(state: AppState, req: Request) -> Response {
         let Some(identity) = &state.0.identity else {
             return problem(StatusCode::SERVICE_UNAVAILABLE);
@@ -559,6 +737,89 @@ pub mod handlers {
             }
             Err(e) => problem_response(&e, None),
         }
+    }
+
+    /// The caller of a Self_ or Key route: a web session or a hub
+    /// key. Sessions can do everything; a manage key cannot create
+    /// keys or change passwords (identity spec, section 4).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum CallerKind {
+        Session,
+        HubKey,
+    }
+
+    #[allow(missing_debug_implementations)]
+    pub struct Caller {
+        pub kind: CallerKind,
+        pub auth_user: riehub_identity::roles::AuthUser,
+        pub acl: Option<riehub_vault::Acl>,
+    }
+
+    /// Reads the hub key token from the three accepted headers.
+    fn key_token_of(req: &Request) -> Option<String> {
+        use axum::http::header;
+        for (name, prefix) in [
+            (header::AUTHORIZATION, "Bearer "),
+            (axum::http::header::HeaderName::from_static("x-api-key"), ""),
+            (
+                axum::http::header::HeaderName::from_static("x-goog-api-key"),
+                "",
+            ),
+        ] {
+            if let Some(value) = req.headers().get(name).and_then(|v| v.to_str().ok()) {
+                let token = value.strip_prefix(prefix).unwrap_or(value).trim();
+                if token.starts_with("rh_") {
+                    return Some(token.to_owned());
+                }
+            }
+        }
+        None
+    }
+
+    /// The caller of the request: a session cookie or a hub key with
+    /// the scope the route class demands. 401 without credentials,
+    /// 403 with the wrong scope.
+    async fn require_caller(
+        state: &AppState,
+        session_token: Option<String>,
+        rh_token: Option<String>,
+        key_scope: Option<riehub_identity::keys::KeyScope>,
+    ) -> std::result::Result<Caller, Box<Response>> {
+        let Some(identity) = &state.0.identity else {
+            return Err(Box::new(problem(StatusCode::SERVICE_UNAVAILABLE)));
+        };
+        if let Some(token) = rh_token {
+            let key = identity.auth_key(&token, key_scope).await.map_err(|e| {
+                let status = match &e {
+                    riehub_core::Error::Forbidden(_) => StatusCode::FORBIDDEN,
+                    _ => StatusCode::UNAUTHORIZED,
+                };
+                Box::new(problem(status))
+            })?;
+            let auth_user = riehub_identity::roles::AuthUser {
+                user_id: key.user_id.clone(),
+                roles: identity.roles_of(&key.user_id).await.unwrap_or_default(),
+                session_id: format!("hk.{}", key.key_id),
+                unlocked: key.unlocked.clone(),
+            };
+            return Ok(Caller {
+                kind: CallerKind::HubKey,
+                auth_user,
+                acl: Some(key.vault_acl()),
+            });
+        }
+        if let Some(token) = session_token {
+            let session = identity
+                .validate_session(&token)
+                .await
+                .map_err(|_| Box::new(problem(StatusCode::UNAUTHORIZED)))?;
+            return Ok(Caller {
+                kind: CallerKind::Session,
+                auth_user: session.auth_user,
+                acl: None,
+            });
+        }
+        Err(Box::new(problem(StatusCode::UNAUTHORIZED)))
     }
 
     /// Reads the session cookie from the request.
