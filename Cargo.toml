@@ -1,9 +1,28 @@
-[package]
-name = "riehub"
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.0.1"
 edition = "2021"
-description = "One private hub for every AI model, tool, skill and workflow."
 license = "Apache-2.0"
 repository = "https://github.com/arkrwn/riehub"
+rust-version = "1.99.1"
 
-[dependencies]
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+[workspace.dependencies]
+riehub-core = { path = "crates/riehub-core", version = "0.0.1" }
+riehub-crypto = { path = "crates/riehub-crypto", version = "0.0.1" }
+riehub-store = { path = "crates/riehub-store", version = "0.0.1" }
+riehub-audit = { path = "crates/riehub-audit", version = "0.0.1" }

@@ -3,5 +3,38 @@
 version = 4
 
 [[package]]
-name = "riehub"
+name = "riehub-audit"
 version = "0.0.1"
+dependencies = [
+ "riehub-core",
+ "riehub-crypto",
+ "riehub-store",
+]
+
+[[package]]
+name = "riehub-core"
+version = "0.0.1"
+
+[[package]]
+name = "riehub-crypto"
+version = "0.0.1"
+dependencies = [
+ "riehub-core",
+]
+
+[[package]]
+name = "riehub-server"
+version = "0.0.1"
+dependencies = [
+ "riehub-audit",
+ "riehub-core",
+ "riehub-crypto",
+ "riehub-store",
+]
+
+[[package]]
+name = "riehub-store"
+version = "0.0.1"
+dependencies = [
+ "riehub-core",
+]

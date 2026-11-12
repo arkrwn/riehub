@@ -9,7 +9,7 @@ proof column names that tree. The plan behind the rows is the
 | Task | Title | Version | State | Proof |
 |---|---|---|---|---|
 | T-0001 | Toolchain and gate | 0.0.1 | done | 2026-11-12, make gate green on tree b703d32a595f |
-| T-0002 | Cargo workspace and crate skeletons | 0.0.1 | todo | |
+| T-0002 | Cargo workspace and crate skeletons | 0.0.1 | done | 2026-11-12, make gate green on tree acc8a282fd75 |
 | T-0003 | Core types: ids, Secret, Content, errors, clock | 0.0.1 | todo | |
 | T-0004 | Configuration loading | 0.0.1 | todo | |
 | T-0005 | Crypto primitives | 0.0.1 | todo | |
