@@ -1308,6 +1308,7 @@ dependencies = [
  "riehub-core",
  "riehub-crypto",
  "riehub-store",
+ "riehub-vault",
  "serde_json",
  "sqlx",
  "tokio",

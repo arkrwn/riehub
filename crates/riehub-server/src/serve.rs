@@ -42,8 +42,23 @@ pub struct Server {
 pub async fn assemble(config: Config) -> Result<Server> {
     let store = Arc::new(riehub_store::open(&config.database.url).await?);
     store.migrate().await?;
-    let key = riehub_audit::AuditChainMac::new(crate::cli::load_audit_key(&config)?);
-    let audit = Arc::new(AuditLog::new(store.clone(), key));
+    // The audit key comes from the instance coffer. If the host seal
+    // cannot be opened, the server refuses to start (S6).
+    let (coffer, unlocked) = crate::cli::open_instance_coffer(&config, &store).await?;
+    let bytes = riehub_vault::instance::get_secret(
+        &coffer.file,
+        &unlocked,
+        riehub_vault::instance::AUDIT_KEY_PATH,
+    )?;
+    if bytes.len() != 32 {
+        return Err(riehub_core::Error::Invalid(
+            "the audit key entry must hold 32 bytes".to_owned(),
+        ));
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&bytes);
+    let mac = riehub_audit::AuditChainMac::new(riehub_crypto::Key32::new(key));
+    let audit = Arc::new(AuditLog::new(store.clone(), mac));
     Ok(Server {
         config,
         store,

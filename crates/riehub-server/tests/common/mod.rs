@@ -38,15 +38,31 @@ impl TestServer {
         drop(probe);
 
         let url = format!("sqlite://{}/riehub.db", dir.display());
+        let key_file = dir.join("host.key");
         let config_path = dir.join("riehub.toml");
         std::fs::write(
             &config_path,
             format!(
-                "profile = \"dev\"\n\n[server]\nbind = \"127.0.0.1:{port}\"\n\n[data]\ndir = \"{}\"\n\n[database]\nurl = \"{url}\"\n\n[log]\nlevel = \"trace\"\n",
-                dir.display()
+                "profile = \"dev\"\n\n[server]\nbind = \"127.0.0.1:{port}\"\n\n[data]\ndir = \"{}\"\n\n[database]\nurl = \"{url}\"\n\n[instance]\nseal = \"file\"\nkey_file = \"{}\"\n\n[log]\nlevel = \"trace\"\n",
+                dir.display(),
+                key_file.display()
             ),
         )
         .unwrap();
+
+        // The instance coffer must exist before serve can start.
+        let init = Command::new(env!("CARGO_BIN_EXE_riehub"))
+            .arg("init")
+            .arg("--config")
+            .arg(&config_path)
+            .output()
+            .unwrap();
+        if !init.status.success() {
+            panic!(
+                "riehub init failed: {}",
+                String::from_utf8_lossy(&init.stderr)
+            );
+        }
 
         let mut child = Command::new(env!("CARGO_BIN_EXE_riehub"))
             .arg("serve")

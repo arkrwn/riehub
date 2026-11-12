@@ -10,73 +10,29 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// The audit key file in the data directory, mode 0600, created at
-/// first start. The instance coffer replaces this in T-0102.
-#[derive(Debug)]
-pub struct FileKeySource {
-    path: PathBuf,
+use riehub_vault::instance::{
+    self as instance_coffer, InstanceCoffer, InstanceUnlocked, AUDIT_KEY_PATH, COOKIE_KEY_PATH,
+};
+
+/// The seal backend the config names.
+pub fn seal_backend(config: &Config) -> Result<riehub_vault::instance::SealBackend> {
+    riehub_vault::instance::SealBackend::from_config(
+        &config.instance.seal,
+        &config.instance.key_file,
+    )
 }
 
-impl FileKeySource {
-    pub fn new(data_dir: &str) -> Self {
-        Self {
-            path: Path::new(data_dir).join("audit.key"),
-        }
-    }
-
-    fn ensure_file(&self) -> Result<()> {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&self.path)
-            {
-                Ok(mut file) => {
-                    let key = riehub_crypto::random_bytes::<32>();
-                    std::io::Write::write_all(&mut file, &key)
-                        .map_err(|_| riehub_core::Error::Internal(None))?;
-                    Ok(())
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    let meta = std::fs::metadata(&self.path)
-                        .map_err(|_| riehub_core::Error::Internal(None))?;
-                    if meta.permissions().mode() & 0o077 != 0 {
-                        return Err(riehub_core::Error::Invalid(
-                            "audit key file: group or world readable files are refused".to_owned(),
-                        ));
-                    }
-                    Ok(())
-                }
-                Err(_) => Err(riehub_core::Error::Invalid(
-                    "audit key file: the data directory is not writable".to_owned(),
-                )),
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            Err(riehub_core::Error::Invalid(
-                "audit key file: this platform has no supported mode bits".to_owned(),
-            ))
-        }
-    }
-}
-
-impl riehub_audit::KeySource for FileKeySource {
-    fn load(&self) -> Result<Key32> {
-        self.ensure_file()?;
-        let bytes = std::fs::read(&self.path).map_err(|_| riehub_core::Error::Internal(None))?;
-        if bytes.len() != 32 {
-            return Err(riehub_core::Error::Invalid(
-                "audit key file: it must hold exactly 32 bytes".to_owned(),
-            ));
-        }
-        let mut key = [0u8; 32];
-        key.copy_from_slice(&bytes);
-        Ok(Key32::new(key))
-    }
+/// Opens the instance coffer with the configured seal backend.
+pub async fn open_instance_coffer(
+    config: &Config,
+    store: &riehub_store::sqlite::SqliteStore,
+) -> Result<(InstanceCoffer, InstanceUnlocked)> {
+    let backend = seal_backend(config)?.host_seal()?;
+    let unlocked = instance_coffer::open(store, backend.as_ref()).await?;
+    let coffer = instance_coffer::load(store)
+        .await?
+        .ok_or_else(|| riehub_core::Error::NotFound("the instance coffer is gone".to_owned()))?;
+    Ok((coffer, unlocked))
 }
 
 /// Loads and validates the config, then opens and migrates the store.
@@ -88,16 +44,34 @@ pub async fn open_store(config_path: Option<&Path>) -> Result<riehub_store::sqli
     Ok(store)
 }
 
-/// The audit key for the config's data directory.
-pub fn load_audit_key(config: &Config) -> Result<riehub_crypto::Key32> {
-    riehub_audit::KeySource::load(&FileKeySource::new(&config.data.dir))
+/// The audit key, read from the instance coffer entry `audit/key`.
+pub async fn load_audit_key(config: &Config) -> Result<Key32> {
+    let store = riehub_store::open(&config.database.url).await?;
+    let (coffer, unlocked) = open_instance_coffer(config, &store).await?;
+    let bytes = instance_coffer::get_secret(&coffer.file, &unlocked, AUDIT_KEY_PATH)?;
+    if bytes.len() != 32 {
+        return Err(riehub_core::Error::Invalid(
+            "the audit key entry must hold 32 bytes".to_owned(),
+        ));
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&bytes);
+    Ok(Key32::new(key))
 }
 
-/// `riehub init`: creates the data directory with mode 0700 and runs
-/// the migrations (api spec, section 4).
+/// `riehub init`: creates the data directory with mode 0700, runs the
+/// migrations, creates the instance coffer with the audit and cookie
+/// keys, and prints the armored instance recovery key exactly once
+/// (api spec, section 4).
 pub fn run_init(config_path: Option<&Path>) -> ExitCode {
     match init_with(config_path) {
-        Ok(()) => {
+        Ok(Some(armored)) => {
+            print_line("riehub init ok");
+            print_line("instance recovery key (shown once, store it safely):");
+            print_line(&armored);
+            ExitCode::SUCCESS
+        }
+        Ok(None) => {
             print_line("riehub init ok");
             ExitCode::SUCCESS
         }
@@ -108,7 +82,7 @@ pub fn run_init(config_path: Option<&Path>) -> ExitCode {
     }
 }
 
-fn init_with(config_path: Option<&Path>) -> Result<()> {
+fn init_with(config_path: Option<&Path>) -> Result<Option<String>> {
     use std::os::unix::fs::PermissionsExt;
     let config = Config::load(config_path)?;
     config.validate()?;
@@ -127,12 +101,31 @@ fn init_with(config_path: Option<&Path>) -> Result<()> {
     std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(|_| {
         riehub_core::Error::Invalid("data.dir: the mode is not settable".to_owned())
     })?;
-    // The store needs the runtime for its async open.
+    // The store and the coffer need the runtime for their async open.
     let rt = tokio::runtime::Runtime::new().map_err(|_| riehub_core::Error::Internal(None))?;
     rt.block_on(async move {
         let store = riehub_store::open(&config.database.url).await?;
         store.migrate().await?;
-        Ok(())
+        if instance_coffer::load(&store).await?.is_some() {
+            return Ok(None);
+        }
+        let backend = seal_backend(&config)?.host_seal()?;
+        let (coffer, armored) = instance_coffer::create(&store, backend.as_ref()).await?;
+        // The seal backend can always unseal what it just sealed, so
+        // the first save re-opens the coffer through it.
+        let unlocked = instance_coffer::open(&store, backend.as_ref()).await?;
+        let entries = vec![
+            (
+                AUDIT_KEY_PATH.to_owned(),
+                riehub_crypto::random_bytes::<32>().to_vec(),
+            ),
+            (
+                COOKIE_KEY_PATH.to_owned(),
+                riehub_crypto::random_bytes::<32>().to_vec(),
+            ),
+        ];
+        instance_coffer::save(&store, &coffer, &unlocked, &entries, 1).await?;
+        Ok(Some(armored))
     })
 }
 
@@ -214,7 +207,7 @@ pub async fn run_audit(args: &AuditArgs) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let key = match load_audit_key(&config) {
+    let key = match load_audit_key(&config).await {
         Ok(k) => k,
         Err(e) => {
             print_error(&e.to_string());

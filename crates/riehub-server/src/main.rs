@@ -112,7 +112,13 @@ fn main() -> ExitCode {
                 }
             })
         }
-        Command::Doctor => doctor(),
+        Command::Doctor => {
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(rt) => rt,
+                Err(_) => return ExitCode::FAILURE,
+            };
+            rt.block_on(doctor())
+        }
         Command::Audit(args) => {
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
@@ -123,7 +129,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn doctor() -> ExitCode {
+async fn doctor() -> ExitCode {
     let mut all_ok = true;
     let mut out = std::io::stdout().lock();
 
@@ -148,7 +154,7 @@ fn doctor() -> ExitCode {
     let (data_ok, data_note) = check_data_dir(&config);
     report_check(&mut out, "data-dir", data_ok, &data_note, &mut all_ok);
 
-    let (seal_ok, seal_note) = check_seal(&config);
+    let (seal_ok, seal_note) = check_seal(&config).await;
     report_check(&mut out, "seal", seal_ok, &seal_note, &mut all_ok);
 
     let (clock_ok, clock_note) = check_clock();
@@ -210,14 +216,25 @@ fn world_readable(_path: &str) -> bool {
     false
 }
 
-fn check_seal(config: &Config) -> (bool, String) {
+async fn check_seal(config: &Config) -> (bool, String) {
     if config.instance.seal == riehub_core::Seal::File && config.instance.key_file.is_empty() {
-        (
+        return (
             false,
             "instance.seal is file but instance.key_file is empty".to_owned(),
-        )
-    } else {
-        (true, String::new())
+        );
+    }
+    match cli::seal_backend(config).and_then(|b| b.host_seal()) {
+        Ok(host_seal) => {
+            let store = match riehub_store::open(&config.database.url).await {
+                Ok(store) => store,
+                Err(e) => return (false, e.to_string()),
+            };
+            match riehub_vault::instance::open(&store, host_seal.as_ref()).await {
+                Ok(_) => (true, String::new()),
+                Err(e) => (false, format!("the seal does not open ({e})")),
+            }
+        }
+        Err(e) => (false, e.to_string()),
     }
 }
 

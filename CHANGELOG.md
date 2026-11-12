@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The instance coffer in `riehub-vault` and the server: host key
+  seals behind `instance.seal` (systemd, keychain, file), the audit
+  and cookie keys stored inside it, `riehub init` printing the
+  armored recovery key once, and a doctor seal check.
 - The per-user vault in `riehub-vault` on cofferak-core: unlock
   slots from secrets the user presents, recovery keys, ACL-scoped
   entries, content keys for encrypted records, generation compare-and-swap

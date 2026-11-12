@@ -19,7 +19,7 @@ proof column names that tree. The plan behind the rows is the
 | T-0009 | Privacy canary harness | 0.0.1 | done | 2026-11-12, make gate green on tree 9fc2494241dc |
 | T-0099 | Release 0.0.1 | 0.0.1 | done | 2026-11-12, make gate green on tree 4a8c19cfbd5a |
 | T-0101 | Per-user vault on cofferak-core | 0.1.0 | done | 2026-11-12, make gate green on tree 84fff4230a50 |
-| T-0102 | Instance coffer and host seals | 0.1.0 | todo | |
+| T-0102 | Instance coffer and host seals | 0.1.0 | done | 2026-11-12, make gate green on tree 072fd3bee533 |
 | T-0103 | Users, setup and password login | 0.1.0 | todo | |
 | T-0104 | Web sessions | 0.1.0 | todo | |
 | T-0105 | Roles, route classes and user administration | 0.1.0 | todo | |

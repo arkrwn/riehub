@@ -6,6 +6,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod instance;
+
 use cofferak_core::acl::{path_allowed, validate_id, Permission};
 use cofferak_core::crypto::{
     decrypt_entry, encrypt_entry, generate_root_keypair, unwrap_dek_for_host, unwrap_dek_for_root,
