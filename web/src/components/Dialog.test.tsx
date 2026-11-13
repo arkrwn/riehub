@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import { useState } from "react"
 import { Dialog } from "./Dialog"
 
 test("renders content when open, closes on overlay click and Escape", () => {
@@ -24,4 +25,35 @@ test("renders content when open, closes on overlay click and Escape", () => {
     </Dialog>,
   )
   expect(screen.queryByText("hidden")).not.toBeInTheDocument()
+})
+
+test("traps keyboard focus and restores focus when closed", () => {
+  function Harness() {
+    const [open, setOpen] = useState(false)
+    return (
+      <>
+        <button onClick={() => setOpen(true)}>Open dialog</button>
+        <Dialog open={open} onClose={() => setOpen(false)} title="Keyboard dialog">
+          <button>First action</button>
+          <button>Last action</button>
+        </Dialog>
+      </>
+    )
+  }
+
+  render(<Harness />)
+  const opener = screen.getByRole("button", { name: "Open dialog" })
+  opener.focus()
+  fireEvent.click(opener)
+  const first = screen.getByRole("button", { name: "First action" })
+  const last = screen.getByRole("button", { name: "Last action" })
+  expect(first).toHaveFocus()
+
+  fireEvent.keyDown(document, { key: "Tab", shiftKey: true })
+  expect(last).toHaveFocus()
+  fireEvent.keyDown(document, { key: "Tab" })
+  expect(first).toHaveFocus()
+  fireEvent.keyDown(document, { key: "Escape" })
+  expect(opener).toHaveFocus()
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
 })

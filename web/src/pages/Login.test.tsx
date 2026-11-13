@@ -11,7 +11,7 @@ function mockFetch(body: unknown, ok: boolean) {
   return fn
 }
 
-test("posts the credentials and shows the session details", async () => {
+test("posts the credentials and does not render the csrf token", async () => {
   const fetchMock = mockFetch({ csrf_token: "csrf-abc", user_id: "u7" }, true)
   render(<Login />)
 
@@ -30,7 +30,7 @@ test("posts the credentials and shows the session details", async () => {
     ),
   )
   expect(await screen.findByText(/user u7/)).toBeInTheDocument()
-  expect(screen.getByText(/csrf token csrf-abc/)).toBeInTheDocument()
+  expect(screen.queryByText(/csrf-abc/)).not.toBeInTheDocument()
 })
 
 test("shows the server error on a bad password", async () => {

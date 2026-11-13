@@ -27,6 +27,7 @@ export function AcceptInvite() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "invite could not be accepted")
     } finally {
+      setPassword("")
       setBusy(false)
     }
   }

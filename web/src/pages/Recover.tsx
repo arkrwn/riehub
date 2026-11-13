@@ -24,6 +24,8 @@ export function Recover() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "recovery failed")
     } finally {
+      setRecoveryKey("")
+      setNewPassword("")
       setBusy(false)
     }
   }
@@ -50,7 +52,10 @@ export function Recover() {
         />
         <Input
           label="Recovery key"
+          type="password"
           name="recovery_key"
+          autoComplete="off"
+          spellCheck={false}
           value={recoveryKey}
           onChange={(e) => setRecoveryKey(e.target.value)}
           required

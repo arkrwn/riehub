@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react"
-import { login, type LoginResponse } from "../api/client"
+import { login } from "../api/client"
 import { Button } from "../components/Button"
 import { Card } from "../components/Card"
 import { ErrorState } from "../components/ErrorState"
@@ -9,7 +9,7 @@ export function Login() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<LoginResponse | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
@@ -17,19 +17,20 @@ export function Login() {
     setBusy(true)
     setError(null)
     try {
-      setResult(await login(email, password))
+      const result = await login(email, password)
+      setUserId(result.user_id ?? "")
     } catch (err) {
       setError(err instanceof Error ? err.message : "login failed")
     } finally {
+      setPassword("")
       setBusy(false)
     }
   }
 
-  if (result) {
+  if (userId !== null) {
     return (
       <Card className="auth-card" title="Signed in">
-        <p className="muted small">Session created for user {result.user_id}</p>
-        <p className="muted small tnum">csrf token {result.csrf_token}</p>
+        <p className="muted small">Session created for user {userId}</p>
       </Card>
     )
   }

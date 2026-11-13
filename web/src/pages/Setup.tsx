@@ -24,6 +24,7 @@ export function Setup() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "setup failed")
     } finally {
+      setPassword("")
       setBusy(false)
     }
   }
