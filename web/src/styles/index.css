@@ -214,6 +214,10 @@ p {
   transition: background var(--motion), color var(--motion);
 }
 
+.auth-fields .btn {
+  width: 100%;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -358,6 +362,8 @@ p {
 }
 
 .input {
+  width: 100%;
+  box-sizing: border-box;
   height: var(--input-h);
   padding: 0 var(--space-4);
   border: 1px solid transparent;
