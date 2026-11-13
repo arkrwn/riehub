@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { MemoryRouter } from "react-router"
 import { Setup } from "./Setup"
 
 function mockFetch(body: unknown, ok: boolean) {
@@ -13,7 +14,7 @@ function mockFetch(body: unknown, ok: boolean) {
 
 test("creates the account and shows the recovery key once", async () => {
   const fetchMock = mockFetch({ user_id: "u1", recovery_key: "rk-1234-abcd" }, true)
-  render(<Setup />)
+  render(<MemoryRouter><Setup /></MemoryRouter>)
 
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "admin@riehub.dev" } })
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse" } })
@@ -39,7 +40,7 @@ test("creates the account and shows the recovery key once", async () => {
 
 test("shows the server error when setup fails", async () => {
   mockFetch({ message: "email already registered" }, false)
-  render(<Setup />)
+  render(<MemoryRouter><Setup /></MemoryRouter>)
 
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "admin@riehub.dev" } })
   fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse" } })

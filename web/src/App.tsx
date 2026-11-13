@@ -1,15 +1,17 @@
 import { CircleHelp, LayoutDashboard, LogOut, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
-import { Navigate, Outlet, Route, Routes } from "react-router"
+import { Link, Navigate, Outlet, Route, Routes, useNavigate } from "react-router"
+import { logout, me } from "./api/client"
 import { IconButton } from "./components/IconButton"
-import { NavPills } from "./components/NavPills"
 import { Rail } from "./components/Rail"
 import { Card } from "./components/Card"
 import { EmptyState } from "./components/EmptyState"
 import { AcceptInvite } from "./pages/AcceptInvite"
+import { Admin } from "./pages/Admin"
 import { Login } from "./pages/Login"
 import { Recover } from "./pages/Recover"
 import { Setup } from "./pages/Setup"
+import { Security } from "./pages/Security"
 
 /*
   The theme preference is the only thing kept in localStorage. Nothing
@@ -18,15 +20,6 @@ import { Setup } from "./pages/Setup"
 const THEME_KEY = "riehub-theme"
 
 type Theme = "light" | "dark"
-
-const NAV_ITEMS = [
-  { id: "overview", label: "Overview" },
-  { id: "chat", label: "Chat" },
-  { id: "router", label: "Router" },
-  { id: "tools", label: "Tools" },
-  { id: "automation", label: "Automation" },
-  { id: "usage", label: "Usage" },
-]
 
 function useTheme() {
   const [theme, setTheme] = useState<Theme>(() =>
@@ -44,22 +37,44 @@ function LogoPill() {
 }
 
 function TopBar() {
-  const [active, setActive] = useState("overview")
   return (
     <header className="topbar">
       <LogoPill />
-      <NavPills items={NAV_ITEMS} active={active} onSelect={setActive} />
+      <nav className="topbar-links" aria-label="Workspace">
+        <Link to="/">Overview</Link>
+        <Link to="/account/security">Security</Link>
+        <Link to="/admin">Administration</Link>
+      </nav>
       <span className="user-pill">
         <span className="avatar" aria-hidden="true">
           R
         </span>
-        <span>riehub</span>
+        <span>Account</span>
       </span>
     </header>
   )
 }
 
 function SignedInShell({ theme, toggle }: { theme: Theme; toggle: () => void }) {
+  const navigate = useNavigate()
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null)
+  useEffect(() => {
+    let active = true
+    void me().then(() => { if (active) setAuthenticated(true) }).catch(() => { if (active) setAuthenticated(false) })
+    return () => { active = false }
+  }, [])
+
+  if (authenticated === null) return <div className="auth-shell" role="status">Loading your workspace…</div>
+  if (!authenticated) return <Navigate to="/login" replace />
+
+  async function handleLogout() {
+    try {
+      await logout()
+    } finally {
+      navigate("/login", { replace: true })
+    }
+  }
+
   return (
     <div className="app-shell">
       <Rail
@@ -81,7 +96,7 @@ function SignedInShell({ theme, toggle }: { theme: Theme; toggle: () => void }) 
             <IconButton label="Help">
               <CircleHelp size={18} />
             </IconButton>
-            <IconButton label="Log out">
+            <IconButton label="Log out" onClick={() => void handleLogout()}>
               <LogOut size={18} />
             </IconButton>
           </>
@@ -127,6 +142,8 @@ export function App() {
       </Route>
       <Route element={<SignedInShell theme={theme} toggle={toggle} />}>
         <Route path="/" element={<Home />} />
+        <Route path="/account/security" element={<Security />} />
+        <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

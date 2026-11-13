@@ -331,6 +331,25 @@ p {
   color: var(--ink);
 }
 
+.topbar-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbar-links a {
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: var(--radius-control);
+  padding: 10px 14px;
+}
+
+.topbar-links a:hover,
+.topbar-links a:focus-visible {
+  color: var(--ink);
+  background: var(--subtle);
+}
+
 .nav-pill.active {
   background: var(--ink);
   color: var(--ink-inverse);
@@ -509,6 +528,81 @@ p {
 
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+.account-page {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-5);
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.account-page > header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--forest);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.account-form {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 520px;
+}
+
+.account-inline-form {
+  display: flex;
+  align-items: end;
+  gap: var(--space-3);
+  max-width: 720px;
+}
+
+.account-inline-form .field {
+  flex: 1;
+}
+
+.account-list {
+  display: grid;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.account-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--line);
+}
+
+.account-list li > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-list small {
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .account-inline-form,
+  .account-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 /* Below 1024 px the rail becomes a bottom bar and cards stack. */

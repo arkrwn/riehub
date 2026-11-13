@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react"
+import { useNavigate } from "react-router"
 import { setup } from "../api/client"
 import { Button } from "../components/Button"
 import { Card } from "../components/Card"
@@ -7,6 +8,7 @@ import { Input } from "../components/Input"
 import { SecretReveal } from "../components/SecretReveal"
 
 export function Setup() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export function Setup() {
         open={recoveryKey !== null}
         value={recoveryKey ?? ""}
         title="Recovery key"
-        onClose={() => setRecoveryKey(null)}
+        onClose={() => { setRecoveryKey(null); navigate("/", { replace: true }) }}
       />
     </Card>
   )

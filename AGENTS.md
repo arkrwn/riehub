@@ -25,7 +25,7 @@ Use the simplest useful loop:
 
 1. Build a complete slice that advances the current milestone.
 2. Run focused tests while developing. Run the full CI checks at
-   integration and release checkpoints. Make a preview available early;
+   integration and release checkpoints. Make a preview available early.
    reserve the full release gate for 0.1.0.
 3. Fix failures. Report any check that could not be run.
 4. Commit and push the integrated work for review.

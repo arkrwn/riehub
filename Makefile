@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 DOCS_VENV := .venv-docs
 
-.PHONY: help build fmt lint test rules check security gate tools docs docs-serve clean clean-stack web-build web-test web-lint openapi-drift
+.PHONY: help build fmt lint test rules check security gate tools docs docs-serve clean clean-stack web-deps web-build web-test web-lint openapi-drift
 
 help:
 	@echo "make build       build the project"
@@ -56,14 +56,20 @@ clean: clean-stack
 	rm -rf web/dist
 
 # ---- stack: web (npm ci --ignore-scripts everywhere, web spec section 1)
-web-build:
-	(cd web && npm ci --ignore-scripts && npm run build)
+web-deps: web/node_modules/.installed
 
-web-test:
-	(cd web && npm ci --ignore-scripts && npm run test)
+web/node_modules/.installed: web/package.json web/package-lock.json
+	(cd web && npm ci --ignore-scripts)
+	@touch $@
 
-web-lint:
-	(cd web && npm ci --ignore-scripts && npm run lint)
+web-build: web-deps
+	(cd web && npm run build)
+
+web-test: web-deps
+	(cd web && npm run test)
+
+web-lint: web-deps
+	(cd web && npm run lint)
 
 # The committed OpenAPI document and generated TypeScript types must
 # match their generators.

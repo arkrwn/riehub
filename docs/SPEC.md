@@ -211,7 +211,7 @@ before calling a phase ready to ship.
 | Version | Goal |
 |---|---|
 | `0.0.1` | Build the complete planned product feature set. This is a development build, not a production-ready release. |
-| `0.0.2`–`0.0.100` | Publish useful testable previews quickly; iterate on user feedback and defects with relevant CI checks. Do not wait for `0.0.100` to start testing. |
+| `0.0.2`–`0.0.100` | Publish useful testable previews quickly. Iterate on user feedback and defects with relevant CI checks. Do not wait for `0.0.100` to start testing. |
 | `0.1.0` | Production-ready release with end-to-end coverage, security and dependency checks, deployment guidance, and green CI. |
 
 Use Semantic Versioning after `0.1.0`. Until `1.0.0`, storage and API

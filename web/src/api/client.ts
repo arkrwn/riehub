@@ -13,6 +13,7 @@ export type AcceptInviteResponse = paths["/api/v1/invites/{token}"]["post"]["res
 export type MeResponse = paths["/api/v1/me"]["get"]["responses"][200]["content"]["application/json"]
 
 const BASE = "/api/v1"
+let csrfToken: string | null = null
 
 export class ApiError extends Error {
   status: number
@@ -24,30 +25,33 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions {
+export interface RequestOptions {
   method: string
   path: string
   body?: unknown
 }
 
-async function request<T>({ method, path, body }: RequestOptions): Promise<T> {
+export async function request<T>({ method, path, body }: RequestOptions): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (body !== undefined) headers["Content-Type"] = "application/json"
+  if (method !== "GET" && csrfToken) headers["x-csrf-token"] = csrfToken
   const res = await fetch(BASE + path, {
     method,
     credentials: "include",
-    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    headers: Object.keys(headers).length ? headers : undefined,
     body: body === undefined ? undefined : JSON.stringify(body),
   })
 
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as { message?: string } | null
-    const message = data?.message ?? `request failed with status ${res.status}`
+    const data = (await res.json().catch(() => null)) as { message?: string; detail?: string; title?: string } | null
+    const message = data?.message ?? data?.detail ?? data?.title ?? `request failed with status ${res.status}`
     throw new ApiError(message, res.status)
   }
 
   return (await res.json()) as T
 }
 
-export function setup(email: string, password: string): Promise<SetupResponse> {
+export async function setup(email: string, password: string): Promise<SetupResponse> {
   return request<SetupResponse>({
     method: "POST",
     path: "/setup",
@@ -55,12 +59,14 @@ export function setup(email: string, password: string): Promise<SetupResponse> {
   })
 }
 
-export function login(email: string, password: string): Promise<LoginResponse> {
-  return request<LoginResponse>({
+export async function login(email: string, password: string): Promise<LoginResponse> {
+  const result = await request<LoginResponse>({
     method: "POST",
     path: "/auth/login",
     body: { email, password },
   })
+  csrfToken = result.csrf_token ?? null
+  return result
 }
 
 export function recover(
@@ -84,5 +90,47 @@ export function acceptInvite(token: string, password: string): Promise<AcceptInv
 }
 
 export function me(): Promise<MeResponse> {
-  return request<MeResponse>({ method: "GET", path: "/me" })
+  return request<MeResponse>({ method: "GET", path: "/me" }).then((result) => {
+    csrfToken = result.csrf_token ?? null
+    return result
+  })
+}
+
+export function logout(): Promise<{ status?: string }> {
+  return request<{ status?: string }>({ method: "POST", path: "/auth/logout" }).finally(() => {
+    csrfToken = null
+  })
+}
+
+export type SessionInfo = { session_id: string; sid: string; created_at: number; last_seen: number; expires_at: number }
+export type HubKeyInfo = { id: string; scopes: string[]; acl_prefixes: string[]; expires_at: number | null }
+
+export async function listSessions(): Promise<SessionInfo[]> {
+  const result = await request<{ items?: SessionInfo[] }>({ method: "GET", path: "/me/sessions" })
+  return result.items ?? []
+}
+
+export async function endSession(id: string): Promise<void> {
+  await request({ method: "DELETE", path: `/me/sessions/${encodeURIComponent(id)}` })
+}
+
+export async function listHubKeys(): Promise<HubKeyInfo[]> {
+  const result = await request<{ items?: HubKeyInfo[] }>({ method: "GET", path: "/me/keys" })
+  return result.items ?? []
+}
+
+export function createHubKey(label: string): Promise<{ id?: string; token?: string }> {
+  return request({ method: "POST", path: "/me/keys", body: { label, scopes: ["ai"] } })
+}
+
+export async function revokeHubKey(id: string): Promise<void> {
+  await request({ method: "DELETE", path: `/me/keys/${encodeURIComponent(id)}` })
+}
+
+export function changePassword(current_password: string, new_password: string): Promise<{ status?: string }> {
+  return request({ method: "POST", path: "/me/password", body: { current_password, new_password } })
+}
+
+export function rotateRecoveryKey(): Promise<{ recovery_key?: string }> {
+  return request({ method: "POST", path: "/me/recovery-key/rotate" })
 }
