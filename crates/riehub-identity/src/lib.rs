@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod account;
 pub mod admin;
 pub mod invite;
 pub mod keys;
@@ -35,8 +36,8 @@ const ARGON2_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 const THROTTLE_WINDOW_MS: i64 = 900_000; // 15 minutes
 const ACCOUNT_FAIL_LIMIT: i64 = 5;
 const IP_FAIL_LIMIT: i64 = 20;
-const PW_SLOT_INFO: &str = "riehub/v1/pw/slot";
-const PW_AUTH_INFO: &str = "riehub/v1/pw/auth";
+pub(crate) const PW_SLOT_INFO: &str = "riehub/v1/pw/slot";
+pub(crate) const PW_AUTH_INFO: &str = "riehub/v1/pw/auth";
 const DUMMY_SALT: [u8; 16] = [0x5a; 16];
 
 /// One user of the hub (identity spec, section 1).

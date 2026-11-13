@@ -169,6 +169,34 @@ pub static TABLE: &[RouteSpec] = &[
         handler: |state, req| Box::pin(handlers::delete_key(state, req)),
     },
     RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/me/password",
+        class: RouteClass::Self_,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::change_password(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/me/recovery-key/rotate",
+        class: RouteClass::Self_,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::rotate_recovery_key(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/auth/recover",
+        class: RouteClass::Public,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::recover(state, req)),
+    },
+    RouteSpec {
+        method: &Method::POST,
+        path: "/api/v1/admin/users/{id}/reset",
+        class: RouteClass::AdminMeta,
+        timeout: None,
+        handler: |state, req| Box::pin(handlers::admin_reset_user(state, req)),
+    },
+    RouteSpec {
         method: &Method::GET,
         path: "/v1/models",
         class: RouteClass::Key(Scope::Ai),
@@ -691,6 +719,140 @@ pub mod handlers {
         }
     }
 
+    /// A Self_ route that only a session may call: a hub key cannot
+    /// change passwords or rotate recovery keys (identity spec,
+    /// section 4).
+    async fn require_session_caller(
+        state: &AppState,
+        session_token: Option<String>,
+        _rh_token: Option<String>,
+    ) -> std::result::Result<riehub_identity::roles::AuthUser, Box<Response>> {
+        let Some(identity) = &state.0.identity else {
+            return Err(Box::new(problem(StatusCode::SERVICE_UNAVAILABLE)));
+        };
+        let token = session_token.ok_or_else(|| Box::new(problem(StatusCode::UNAUTHORIZED)))?;
+        let session = identity
+            .validate_session(&token)
+            .await
+            .map_err(|_| Box::new(problem(StatusCode::UNAUTHORIZED)))?;
+        Ok(session.auth_user)
+    }
+
+    pub async fn change_password(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let auth_user = match require_session_caller(&state, session_token, rh_token).await {
+            Ok(user) => user,
+            Err(response) => return *response,
+        };
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let Some(current) = field(&body, "current_password").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("current_password: the field is required".to_owned()),
+                None,
+            );
+        };
+        let Some(new) = field(&body, "new_password").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("new_password: the field is required".to_owned()),
+                None,
+            );
+        };
+        let current = riehub_core::Secret::new(current);
+        let new = riehub_core::Secret::new(new);
+        match identity.change_password(&auth_user, &current, &new).await {
+            Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn rotate_recovery_key(state: AppState, req: Request) -> Response {
+        use crate::http::SetupResponse;
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let session_token = cookie_of(&req);
+        let rh_token = key_token_of(&req);
+        let auth_user = match require_session_caller(&state, session_token, rh_token).await {
+            Ok(user) => user,
+            Err(response) => return *response,
+        };
+        match identity.rotate_recovery_key(&auth_user).await {
+            Ok(armored) => {
+                SetupResponse::new(auth_user.user_id.to_string(), armored).into_response()
+            }
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn recover(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        let body = match read_json(req).await {
+            Ok(body) => body,
+            Err(response) => return *response,
+        };
+        let Some(email) = field(&body, "email").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("email: the field is required".to_owned()),
+                None,
+            );
+        };
+        let Some(recovery) = field(&body, "recovery_key").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("recovery_key: the field is required".to_owned()),
+                None,
+            );
+        };
+        let Some(new) = field(&body, "new_password").map(str::to_owned) else {
+            return problem_response(
+                &riehub_core::Error::Invalid("new_password: the field is required".to_owned()),
+                None,
+            );
+        };
+        let email = riehub_core::Secret::new(email);
+        let new = riehub_core::Secret::new(new);
+        match identity.recover(&email, &recovery, &new).await {
+            Ok(user_id) => (
+                StatusCode::OK,
+                Json(json!({"status": "ok", "user_id": user_id.to_string()})),
+            )
+                .into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
+    pub async fn admin_reset_user(state: AppState, req: Request) -> Response {
+        let Some(identity) = &state.0.identity else {
+            return problem(StatusCode::SERVICE_UNAVAILABLE);
+        };
+        // Only a session reaches the admin reset; a hub key cannot
+        // (identity spec, section 4).
+        let session_token = cookie_of(&req);
+        let admin = match require_session_caller(&state, session_token, None).await {
+            Ok(user) => user,
+            Err(response) => return *response,
+        };
+        // The path is /api/v1/admin/users/{id}/reset: the id is the
+        // second segment from the end.
+        let segments: Vec<&str> = req.uri().path().split('/').collect();
+        let target = segments
+            .get(segments.len() - 2)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        match identity.admin_reset(&admin, &target).await {
+            Ok(token) => (StatusCode::OK, Json(json!({"invite_token": token}))).into_response(),
+            Err(e) => problem_response(&e, None),
+        }
+    }
+
     pub async fn list_models(state: AppState, req: Request) -> Response {
         let _ = state;
         let _ = req;
@@ -731,10 +893,19 @@ pub mod handlers {
             );
         };
         let password = riehub_core::Secret::new(password);
-        match identity.accept_invite(&token, &password).await {
-            Ok((user_id, armored)) => {
-                SetupResponse::new(user_id.to_string(), armored).into_response()
-            }
+        let recovery = field(&body, "recovery_key").map(str::to_owned);
+        match identity
+            .accept_invite(&token, &password, recovery.as_deref())
+            .await
+        {
+            Ok((user_id, armored)) => match armored {
+                Some(armored) => SetupResponse::new(user_id.to_string(), armored).into_response(),
+                None => (
+                    StatusCode::OK,
+                    Json(json!({"status": "ok", "user_id": user_id.to_string()})),
+                )
+                    .into_response(),
+            },
             Err(e) => problem_response(&e, None),
         }
     }

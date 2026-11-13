@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Account self-service in `riehub-identity` and the API: password
+  change with re-wrapping, recovery through the armored key, recovery
+  key rotation, and the admin reset with recovery-or-start-empty.
 - Hub keys in `riehub-identity` and the API: the `rh_<ID>_<secret>`
   token shown once, the three accepted headers, scopes and ACL
   prefixes, encrypted labels, the Key route class, and manage keys on

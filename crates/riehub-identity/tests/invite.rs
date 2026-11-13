@@ -37,12 +37,20 @@ async fn invite_is_single_use() {
         .await
         .unwrap();
     let (user_id, _recovery) = service
-        .accept_invite(&token, &Secret::new("a-very-good-passphrase-42".to_owned()))
+        .accept_invite(
+            &token,
+            &Secret::new("a-very-good-passphrase-42".to_owned()),
+            None,
+        )
         .await
         .unwrap();
     assert!(!user_id.as_str().is_empty());
     let second = service
-        .accept_invite(&token, &Secret::new("another-good-passphrase-3".to_owned()))
+        .accept_invite(
+            &token,
+            &Secret::new("another-good-passphrase-3".to_owned()),
+            None,
+        )
         .await;
     assert!(second.is_err(), "an invite must be single use");
     let info = service.invite_by_token(&token).await;
@@ -66,7 +74,11 @@ async fn invite_inside_72h_is_accepted() {
 
     clock.advance(71 * 3600 * 1000);
     let (_uid, _recovery) = service
-        .accept_invite(&token, &Secret::new("a-very-good-passphrase-42".to_owned()))
+        .accept_invite(
+            &token,
+            &Secret::new("a-very-good-passphrase-42".to_owned()),
+            None,
+        )
         .await
         .unwrap();
 }
@@ -88,7 +100,11 @@ async fn invite_expired_after_73h_is_refused() {
 
     clock.advance(73 * 3600 * 1000);
     let result = service
-        .accept_invite(&token, &Secret::new("a-very-good-passphrase-42".to_owned()))
+        .accept_invite(
+            &token,
+            &Secret::new("a-very-good-passphrase-42".to_owned()),
+            None,
+        )
         .await;
     assert!(result.is_err(), "an expired invite is refused");
     let info = service.invite_by_token(&token).await;

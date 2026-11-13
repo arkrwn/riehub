@@ -24,7 +24,7 @@ proof column names that tree. The plan behind the rows is the
 | T-0104 | Web sessions | 0.1.0 | done | 2026-11-12, make gate green on tree 09cf7ddc4947 |
 | T-0105 | Roles, route classes and user administration | 0.1.0 | done | 2026-11-12, make gate green on tree d1f7faa4c46a |
 | T-0106 | Hub keys | 0.1.0 | done | 2026-11-12, make gate green on tree e1fc07c327af |
-| T-0107 | Password change, recovery and admin reset | 0.1.0 | todo | |
+| T-0107 | Password change, recovery and admin reset | 0.1.0 | done | 2026-11-13, make gate green on tree 6bb227160722 |
 | T-0108 | Web app shell and design system | 0.1.0 | todo | |
 | T-0109 | Web: account pages and end-to-end smoke | 0.1.0 | todo | |
 | T-0199 | Release 0.1.0 | 0.1.0 | todo | |

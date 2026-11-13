@@ -1320,6 +1320,7 @@ name = "riehub-server"
 version = "0.0.1"
 dependencies = [
  "axum",
+ "cofferak-core",
  "nix",
  "riehub-audit",
  "riehub-core",

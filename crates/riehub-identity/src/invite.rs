@@ -3,9 +3,9 @@
 //! token is high-entropy; the record holds only its hash.
 
 use crate::roles::Role;
-use crate::{AuthKind, Credential, Service, User, UserStatus};
+use crate::{AuthKind, Service, User, UserStatus};
 use riehub_core::error::{Error, Result};
-use riehub_core::{Owner, Secret, UserId};
+use riehub_core::{Owner, UserId};
 use riehub_crypto::random_bytes;
 use riehub_store::record::{Expect, Kind, Record};
 use riehub_store::Store;
@@ -13,7 +13,7 @@ use std::time::Duration;
 
 pub const INVITE_TTL: Duration = Duration::from_secs(72 * 3600);
 
-fn invite_hash(token: &str) -> String {
+pub(crate) fn invite_hash(token: &str) -> String {
     // The token is 256 bits of randomness, so a keyed hash with a
     // fixed key is enough to keep it out of the record in the clear.
     let tag = riehub_crypto::hmac(&riehub_crypto::Key32::new([0u8; 32]), token.as_bytes());
@@ -150,84 +150,5 @@ impl Service {
             }
         }
         Ok(out)
-    }
-
-    /// Accepts an invite: sets the password, creates the vault with
-    /// slot `pw` and the credential, and activates the user. Single
-    /// use: the hash is removed on success.
-    pub async fn accept_invite(
-        &self,
-        token: &str,
-        password: &Secret<String>,
-    ) -> Result<(UserId, String)> {
-        crate::password::validate(&password.expose().as_bytes().into())?;
-        let invite = self.invite_by_token(token).await?;
-        let record = self
-            .store
-            .get(&Owner::Instance, Kind::User, invite.user_id.as_str())
-            .await?
-            .ok_or_else(|| Error::NotFound("no such invite".to_owned()))?;
-
-        let salt: [u8; 16] = random_bytes::<16>();
-        let params = riehub_crypto::Argon2Params::DEFAULT;
-        let pw_material = riehub_crypto::argon2id(password.expose().as_bytes(), &salt, params);
-        let pw_key = crate::pw_slot_key(&pw_material);
-        let verifier = crate::pw_verifier(&pw_material);
-
-        let (vault, recovery) =
-            riehub_vault::create(invite.user_id.clone(), ("pw", pw_key.expose()))?;
-        riehub_vault::save(self.store.as_ref(), self, &vault, 0).await?;
-        let armored = recovery.private.to_armored().as_str().to_owned();
-        let credential = Credential {
-            salt,
-            m_kib: params.m_kib,
-            t: params.t,
-            p: params.p,
-            verifier,
-        };
-        let credential_record = Record {
-            owner: Owner::User(invite.user_id.clone()),
-            kind: Kind::Credential,
-            id: invite.user_id.as_str().to_owned(),
-            parent: None,
-            lookup: None,
-            status: None,
-            sort: 0,
-            meta: serde_json::json!({}),
-            data: Some(crate::encode_credential(&credential)),
-            version: 1,
-            created_at: self.clock.now_millis(),
-            updated_at: self.clock.now_millis(),
-        };
-        self.store.put(&credential_record, Expect::New).await?;
-
-        let mut meta = record.meta.clone();
-        if let Some(obj) = meta.as_object_mut() {
-            obj.remove("invite_hash");
-            obj.remove("invite_expires_at");
-        }
-        let updated = Record {
-            status: Some(UserStatus::Active.as_str().to_owned()),
-            meta,
-            version: record.version + 1,
-            updated_at: self.clock.now_millis(),
-            ..record
-        };
-        self.store
-            .put(&updated, Expect::Version(record.version))
-            .await?;
-
-        self.audit_event(
-            riehub_audit::event::Actor::User(invite.user_id.clone()),
-            riehub_audit::event::AuditAction::UserCreate,
-            riehub_audit::event::Outcome::Ok,
-            Some(invite.user_id.clone()),
-            riehub_audit::event::AuditEvent::UserCreate {
-                user: invite.user_id.clone(),
-            },
-        )
-        .await?;
-
-        Ok((invite.user_id, armored))
     }
 }

@@ -142,6 +142,10 @@ async fn class_tests_cover_every_route() {
         ("POST", "/api/v1/me/keys", "self"),
         ("DELETE", "/api/v1/me/keys/{id}", "self"),
         ("GET", "/v1/models", "key"),
+        ("POST", "/api/v1/me/password", "self"),
+        ("POST", "/api/v1/me/recovery-key/rotate", "self"),
+        ("POST", "/api/v1/auth/recover", "public"),
+        ("POST", "/api/v1/admin/users/{id}/reset", "admin_meta"),
     ];
     assert_eq!(
         expected.len(),
