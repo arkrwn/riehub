@@ -7,9 +7,9 @@ user's own provider connections, MCP connectors, skills, chat sessions
 and workflows. Many users share one instance. No user, and no
 administrator, can read what another user sends through it.
 
-This page is the contract for the whole system. Each subsystem has its
-own page under [spec/](spec/security.md). If a page disagrees with the
-code, the code is the truth: fix the page, or block the task and say so.
+This page and the linked subsystem pages define the product contract.
+When code and spec disagree, bring them back into agreement with the
+smallest clear change.
 
 | Page | Covers |
 |---|---|
@@ -202,14 +202,20 @@ sequenceDiagram
 
 Any failed step before the provider call refuses the request (S6).
 
-## 4. Versioning
+## 4. Delivery and versioning
 
-riehub follows Semantic Versioning. Versions `0.0.1` to `0.9.0` are
-development releases, each adding one layer, listed in the
-[roadmap](ROADMAP.md). `1.0.0` is tagged by the maintainer after the
-hardening milestone and a soak period on a real deployment. Until
-`1.0.0`, storage and API may change between minor versions, and each
-change ships a migration.
+Work in broad product phases. Build the planned feature set first, then
+run the end-to-end suite, fix gaps and regressions, and make CI green
+before calling a phase ready to ship.
+
+| Version | Goal |
+|---|---|
+| `0.0.1` | Build the complete planned product feature set. This is a development build, not a production-ready release. |
+| `0.0.2` | Test the integrated product, fix missing or incorrect behavior, and pass CI. |
+| `0.1.0` | Production-ready release with end-to-end coverage, security and dependency checks, deployment guidance, and green CI. |
+
+Use Semantic Versioning after `0.1.0`. Until `1.0.0`, storage and API
+may change between minor versions, and each change ships a migration.
 
 ## 5. Deliberately out of scope
 

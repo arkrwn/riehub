@@ -30,36 +30,43 @@
 
 ---
 
-**riehub** is a self-hosted server that gives every person in a team
-one private entry point to AI. It routes any agent or SDK to any model
-provider, and it holds each user's own provider accounts, MCP
-connectors, skills, chats and workflows. Many users share one
-instance. Nobody, including the administrator, can read what another
-user sends through it.
+**riehub** is being built as a self-hosted server that gives every
+person in a team one private entry point to AI. The target product
+routes agents and SDKs to model providers, and holds each user's own
+provider accounts, MCP connectors, skills, chats and workflows. The
+The intended security model keeps users' content private from other
+users and operators. This is the project goal, not a claim that the
+current release already provides every capability.
 
-- **One router, every format.** OpenAI Chat Completions, OpenAI
-  Responses, Anthropic Messages and Gemini in front of any provider,
+## Product goals
+
+- **One router, every format.** The target API will support OpenAI Chat
+  Completions and Responses, Anthropic Messages and Gemini in front of providers,
   with routing groups, failover and budgets.
   [Router spec](docs/spec/router.md)
-- **Each user holds their own keys.** Credentials and content are
-  encrypted under keys that only a secret the user presents can open,
-  in a per-user vault built on
+- **Each user holds their own keys.** The design calls for credentials
+  and content to be encrypted in a per-user vault under keys that only
+  a secret the user presents can open. The vault is built on
   [cofferak](https://github.com/arkrwn/cofferak).
   [Security spec](docs/spec/security.md)
-- **Operators see metadata, never content.** A hash-chained audit log
-  records who did what, without prompts or secrets.
+- **Operators see metadata, never content.** The target audit log will
+  record who did what without prompts or secrets.
   [Privacy model](docs/adr/0004-privacy-model.md)
-- **Your tools in one place.** One MCP endpoint per user in front of
-  all their connectors, plus private skills and YAML workflows.
+- **Your tools in one place.** The target product will provide one MCP
+  endpoint per user in front of their connectors, plus private skills
+  and YAML workflows.
   [MCP](docs/spec/mcp.md) · [Automation](docs/spec/automation.md)
 
 ## Status
 
-riehub is being built in the open, version by version. Version
-`0.0.1` is out: the server skeleton with the SQLite store, the audit
-chain and the health endpoints. The [roadmap](docs/ROADMAP.md) lists
-what each version from `0.0.1` to `1.0.0` contains, and the
-[progress page](docs/PROGRESS.md) shows what is done, with proof.
+The existing `v0.0.1` tag is an early foundation baseline with the
+server, SQLite store, audit chain and health endpoints. It is not a
+complete product or suitable for production. The new delivery phases
+build the full planned product as the `0.0.1` development milestone,
+validate and harden it at `0.0.2`, then make `0.1.0` production-ready.
+The existing tag stays as historical baseline. The
+[progress page](docs/PROGRESS.md) records the earlier task plan and may
+not reflect the revised milestones.
 
 ## Quickstart
 
@@ -81,8 +88,10 @@ curl -si http://127.0.0.1:8080/healthz     # {"status":"ok"}
 The full walkthrough, with real output, is in
 [getting started](docs/getting-started.md).
 
-You need Rust (the version in `rust-toolchain.toml`), `make`, `git`
-and Python 3 for the docs site, on Linux or macOS.
+You need Rust (the version in `rust-toolchain.toml`), Node.js 22 or
+newer, `npm`, `make`, `git` and Python 3 for the docs site, on Linux or
+macOS. The Quickstart is for local development. Production deployment
+guidance will be published with the `0.1.0` release.
 
 ## Documentation
 
@@ -91,7 +100,7 @@ and Python 3 for the docs site, on Linux or macOS.
 | [Overview](docs/overview.md) | What riehub is, why, and how it works |
 | [Spec](docs/SPEC.md) and [ADRs](docs/adr/README.md) | The contract, the security invariants and the design decisions |
 | [Roadmap](docs/ROADMAP.md) | Versions `0.0.1` to `1.0.0` |
-| [Progress](docs/PROGRESS.md) | What is done, with proof |
+| [Progress](docs/PROGRESS.md) | Status generated from the earlier task plan |
 | [Development](docs/development.md) | Repository layout, building, testing, the factory |
 
 The same pages are built into a documentation site with MkDocs Material
@@ -100,9 +109,8 @@ The same pages are built into a documentation site with MkDocs Material
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions require accepting
-the project's CLA ([CLA.md](CLA.md)) on your first pull request. People
-and AI agents both start with [AGENTS.md](AGENTS.md) and [SDD.md](SDD.md).
-The work is planned as task cards in [`factory/`](factory/README.md).
+the project's CLA ([CLA.md](CLA.md)) on your first pull request. Read
+[AGENTS.md](AGENTS.md) for the current build, test and review workflow.
 
 ## Security
 

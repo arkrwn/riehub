@@ -1,86 +1,61 @@
-# The riehub factory
+# Delivery workflow
 
-This directory turns the plan into merged, proven work, one task at a
-time. Agents follow [`AGENTS.md`](../AGENTS.md). This page explains the
-machine to people. The decision behind it is ADR 0003.
+riehub is delivered as an integrated product. The task cards and
+`factory.sh` remain available as planning and status tools. They are
+optional. They do not dictate the branch layout, implementation order,
+or when a full CI run is required.
 
-## Parts
+## Milestones
 
-| Part | Role |
+| Version | Goal |
 |---|---|
-| `tasks/M00-*.md` to `tasks/M10-*.md` | The task cards. One file per version, cards in build order. The cards are the plan. |
-| `factory.sh` | The driver. It picks the next card, creates the branch, runs the gate, records proof, merges and deletes the branch. |
-| `state.tsv` | The record of finished tasks. Only `factory.sh finish` writes it. |
-| `SECURITY-CHECKLIST.md` | The review template for cards marked `Review: security`. |
-| `reviews/T-NNNN.md` | One filled checklist per security-reviewed task. |
+| 0.0.1 | Build the full planned feature set into a usable product. |
+| 0.0.2 | Validate user journeys, fix defects, and harden security and reliability. |
+| 0.1.0 | Release a production-ready version after supported CI checks pass. |
 
-`docs/PROGRESS.md` is generated from the cards and `state.tsv`.
+## Delivery loop
 
-## A task card
+1. Choose a useful end-to-end product slice for the current milestone.
+2. Implement it across the required layers. Parallelize independent work
+   when it reduces elapsed time.
+3. Run focused tests and checks while developing.
+4. At integration checkpoints, run the CI suite with `make check` or
+   the full release gate with `make gate`. Fix failures before calling
+   the checkpoint green.
+5. Commit and push integrated changes for review. Report what changed,
+   what passed, and what remains incomplete.
 
-```
-## T-0101 Per-user vault on cofferak-core
-- Version: 0.1.0            the release the task belongs to
-- Depends: T-0005, T-0006   tasks that must be done first, or `none`
-- Review: security          `security` or `standard`
-- Type: feat                commit type, default `feat`
-- Gate: human               only on tasks the maintainer must open
-- Spec: ...                 the only pages the agent needs to read
-- Paths: ...                the only places the agent may change
+Use a branch or worktree layout that fits the work. Keep commits small
+enough to review. Do not spend time maintaining task bookkeeping when it
+does not help product delivery.
 
-### Build      numbered steps
-### Accept     one line per test that must exist and pass
-### Proof      the narrow command to run while working
-```
-
-## The gate
-
-`make gate` runs, in order:
-
-1. `make check`: format, lint with warnings as errors, tests, and
-   `scripts/rules-lint.sh` (mechanical checks for the project rules).
-2. `make security`: `cargo deny check`, and `npm audit` once `web/`
-   exists. A missing tool fails the gate.
-3. `make docs`: strict build of the docs site.
-
-Later tasks extend `check` with the web build, the end-to-end suite and
-the privacy canary test. The gate only ever grows.
-
-`factory.sh gate` runs it on the committed tree and stores the tree
-hash. `factory.sh finish` refuses a tree that has no green gate, a
-branch with AI attribution in a commit, a `feat` or `fix` task without
-a changelog line, and a security task without a passed review file.
-
-## Merge modes
-
-`factory.sh` picks the mode itself. `FACTORY_MODE=pr` or
-`FACTORY_MODE=local` forces one.
-
-- **pr**: used when `gh` is installed and logged in and `origin` is
-  reachable. Push the branch, open a pull request, wait for CI, squash
-  merge, delete the branch on both sides. CI also runs the gate on
-  macOS, which the local gate on a Linux machine cannot.
-- **local**: used otherwise. Squash merge into the local `main`, delete
-  the branch. Nothing is pushed. The maintainer pushes `main` later.
-
-## States
-
-`todo`, `doing`, `blocked`, `done`. Only `done` is committed. `doing`
-and `blocked` live in `.git/factory/local.tsv`, so they belong to one
-working clone and never cause merge noise.
-
-A task is blocked after three red gates, or when it would break a rule.
-`factory.sh block` keeps the branch with the work in progress, records
-the reason and moves on to the next task whose dependencies are done.
-`factory.sh start <ID>` on a blocked task resumes its branch.
-
-## For the maintainer
+## Tools
 
 ```bash
-factory/factory.sh status          # progress, blocked tasks with reasons
-factory/factory.sh approve T-1099  # open a human-gated task
-factory/factory.sh release 0.1.0   # run by the release card, tags v0.1.0
+factory/factory.sh status  # optional view of legacy task progress
+make check                 # build, lint, tests, and project checks
+make security              # dependency and supply-chain checks
+make docs                  # strict docs build
+make gate                  # complete release checkpoint
 ```
 
-To change the plan, edit the cards in a normal pull request. Never
-renumber a card that is already done. Add a new card with a new number.
+`factory.sh start`, `finish`, `block`, `approve`, and `release` support
+the earlier card-based workflow. Use them only when the maintainer
+chooses that workflow. In particular, `finish` merges and deletes the
+working branch, so do not use it as a routine substitute for pushing a
+branch for review.
+
+## Quality bar for 0.1.0
+
+The 0.1.0 release is production-ready. Core setup, login, account
+recovery, provider connections, model requests, routing, and the
+management UI must work as complete journeys. Cross-user access must be
+blocked. Secrets and user content must stay private. Deployment,
+backup, restore, upgrades, and operator recovery must be documented.
+The supported CI suite must pass on Linux and macOS. Open high-impact
+security and reliability defects block the release.
+
+Task cards under `tasks/` and generated progress under `docs/PROGRESS.md`
+are historical planning records until the maintainer replaces them with
+a new plan. Do not let their old per-task gates delay the active
+milestone.

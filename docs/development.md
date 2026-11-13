@@ -1,79 +1,85 @@
 # Development
 
+riehub is built in three product milestones:
+
+| Version | Goal |
+|---|---|
+| `0.0.1` | Build and integrate the planned feature set as one usable product. Use focused checks while implementing and record known gaps. |
+| `0.0.2` | Run end-to-end journeys and operational checks, fix gaps, and harden security and reliability. |
+| `0.1.0` | Ship a production-ready product after supported CI checks and release requirements pass. |
+
+The current `v0.0.1` tag is an early baseline. It does not mean the
+feature-complete milestone is done. See the [roadmap](ROADMAP.md) for
+the release goals.
+
 ## Repository layout
 
 ```
 riehub/
-  AGENTS.md          # entry point for AI agents (CLAUDE.md -> AGENTS.md)
-  SDD.md             # the design and documentation practice this repo follows
-  README.md          # what it is, the status, the quickstart, links
-  CHANGELOG.md       # user-visible changes per release
-  Makefile           # build, fmt, lint, test, rules, check, security, docs, gate
-  mkdocs.yml         # docs site config and nav
-  deny.toml          # the cargo-deny policy the gate enforces
-  factory/           # task cards, the loop driver, the progress record, reviews
-  scripts/           # rules-lint.sh, security.sh, install-tools.sh
-  docs/              # SPEC.md, spec/, adr/, ROADMAP.md, PROGRESS.md, guides, assets/
-  crates/            # the Rust workspace:
-    riehub-core      #   ids, errors, config, Secret<T>, Content, clock
-    riehub-crypto    #   AEAD, KDFs, hashing, random, constant-time compare
-    riehub-store     #   the Store trait and the SQLite backend
-    riehub-audit     #   typed, hash-chained audit log
-    riehub-server    #   the `riehub` binary: HTTP, CLI, wiring
-  .github/           # CI, docs deploy, PR and issue templates
+  AGENTS.md          # concise guidance for people and coding agents
+  README.md          # product overview, status and quickstart
+  CHANGELOG.md       # user-visible changes
+  Makefile           # build, checks, security and docs commands
+  docs/              # product spec, subsystem specs, ADRs and guides
+  factory/           # optional task cards and legacy progress tools
+  scripts/           # rules lint, dependency checks and tool setup
+  crates/            # Rust workspace and server
+  web/               # React and TypeScript UI
+  deploy/            # deployment assets as they are implemented
 ```
 
-The web UI under `web/`, the deployment files under `deploy/` and the
-remaining workspace crates are created by their tasks. The crate
-boundaries are fixed in the
-[specification](SPEC.md#31-crates-and-their-boundaries).
+The product contract is in [SPEC.md](SPEC.md). Its subsystem pages
+describe identity, security, routing, storage, MCP, automation, the web
+UI and deployment.
 
-## Building and testing
+## Build and checks
 
 ```bash
-make build        # build
-make check        # fmt + lint + test + project rules, what CI runs
-make security     # cargo deny, and npm audit once web/ exists
-make docs         # strict build of the docs site
-make gate         # check + security + docs, what a task needs to merge
-make tools        # install the tools the gate needs
-make docs-serve   # preview the docs site at http://127.0.0.1:8000
+make build        # build the Rust workspace and web UI
+make fmt          # check Rust formatting
+make lint         # run Rust lint checks
+make test         # run Rust tests
+make check        # CI checks, including web lint, tests and build
+make security     # dependency and supply-chain checks
+make docs         # strict documentation build
+make gate         # full release checkpoint
+make tools        # install local gate tools
+make docs-serve   # preview docs at http://127.0.0.1:8000
 ```
 
-## The factory
+Use focused commands during implementation. Run `make check` at
+integration checkpoints and before pushing a release candidate. Fix
+failures before reporting a checkpoint as green. If a check cannot run,
+say which check and why.
 
-Work is planned as task cards and driven by one script. The full
-description is in
-[factory/README.md](https://github.com/arkrwn/riehub/blob/main/factory/README.md),
-the decision in [ADR 0003](adr/0003-software-factory.md).
+## Delivery workflow
 
-```bash
-factory/factory.sh status         # progress per version
-factory/factory.sh next           # the next task card
-factory/factory.sh start T-0001   # one branch per task
-# ... build what the card says, test first ...
-factory/factory.sh gate           # run the gate on the committed tree
-factory/factory.sh finish T-0001  # record proof, merge, delete the branch
-```
+Build broad, integrated product slices. Split work across people or
+agents when the tasks have clear, independent ownership. Integrate
+frequently and push working changes for review. Do not delay useful
+product progress to complete small cards one by one.
 
-A person and an AI agent use the same commands. The rules an agent
-follows are in
-[AGENTS.md](https://github.com/arkrwn/riehub/blob/main/AGENTS.md), the
-practice behind them in
-[SDD.md](https://github.com/arkrwn/riehub/blob/main/SDD.md).
+The factory task cards and commands are optional planning tools. They
+remain available through
+[`factory/README.md`](https://github.com/arkrwn/riehub/blob/main/factory/README.md).
+They do not require test-first development, one branch per card, or an
+automatic merge. `factory/factory.sh status` can still show the earlier
+task plan.
 
-## Rules that shape the code
+## Security and correctness
 
-- Security invariants S1 to S12 in the [specification](SPEC.md) hold
-  in every commit.
-- No `unsafe`, no Windows code path, no print macros, no content in
-  logs. `scripts/rules-lint.sh` checks the mechanical part.
-- Secrets and user content travel in `Secret<T>` and `Content`, which
-  cannot be printed or serialised by accident.
-- Every route has a class in the route table, and tests are generated
-  from the table.
-- Tests never call a real provider. They use local mocks and synthetic
-  fixtures.
+- Preserve security invariants S1-S12 in the [specification](SPEC.md).
+- Do not commit credentials, keys, user data or private infrastructure
+  details. Use clearly fake test values.
+- Keep credentials and user content out of logs, errors, metrics,
+  traces, audit metadata and browser storage. Theme preference is the
+  only browser preference stored in local storage.
+- Enforce authorization on the server and treat client input as
+  untrusted. Route user-controlled outbound requests through the
+  guarded egress client.
+- Do not add `unsafe` or Windows code paths.
+- Tests must use local mocks and synthetic fixtures rather than real
+  providers.
 
 ## Contributing
 
