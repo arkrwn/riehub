@@ -13,9 +13,10 @@ Deliver in three milestones:
 1. **0.0.1: feature-complete build.** Implement the planned user-facing
    product end to end. Optimize for a complete, integrated product, not
    for finishing many small cards or polishing isolated modules.
-2. **0.0.2: validation and hardening.** Exercise real user journeys,
-   fix gaps and defects, improve security and reliability, and keep the
-   CI suite green.
+2. **0.0.2–0.0.100: fast preview iterations.** Push small, testable
+   snapshots as soon as useful. Use feedback and focused checks to fix
+   gaps, improve security and reliability, and keep CI green. Do not
+   wait for 0.0.100 before making the product available to test.
 3. **0.1.0: production-ready release.** Ship only when the core
    journeys work, security and privacy requirements hold, deployment
    and recovery are documented, and CI passes on supported platforms.
@@ -24,7 +25,8 @@ Use the simplest useful loop:
 
 1. Build a complete slice that advances the current milestone.
 2. Run focused tests while developing. Run the full CI checks at
-   integration and release checkpoints.
+   integration and release checkpoints. Make a preview available early;
+   reserve the full release gate for 0.1.0.
 3. Fix failures. Report any check that could not be run.
 4. Commit and push the integrated work for review.
 

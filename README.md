@@ -63,7 +63,10 @@ The existing `v0.0.1` tag is an early foundation baseline with the
 server, SQLite store, audit chain and health endpoints. It is not a
 complete product or suitable for production. The new delivery phases
 build the full planned product as the `0.0.1` development milestone,
-validate and harden it at `0.0.2`, then make `0.1.0` production-ready.
+then publish fast, testable `0.0.2` through `0.0.100` previews as
+feedback and fixes arrive. Make an integrated `0.1.0` candidate available
+as soon as possible; call it production-ready only when its release
+criteria pass.
 The existing tag stays as historical baseline. The
 [progress page](docs/PROGRESS.md) records the earlier task plan and may
 not reflect the revised milestones.
