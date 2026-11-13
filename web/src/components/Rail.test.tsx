@@ -10,7 +10,10 @@ test("renders the top and bottom slots inside labelled pills", () => {
   )
   const rail = screen.getByRole("complementary", { name: "Sidebar" })
   expect(rail).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "theme" }).parentElement).toHaveClass("rail-pill")
+  const theme = screen.getByRole("button", { name: "theme" })
+  expect(theme.parentElement).toHaveClass("rail-pill")
+  theme.focus()
+  expect(theme).toHaveFocus()
   expect(screen.getByRole("button", { name: "logout" }).parentElement).toHaveClass(
     "rail-pill",
     "rail-bottom",

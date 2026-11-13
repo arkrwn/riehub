@@ -10,6 +10,8 @@ test("renders its label, applies the variant and fires onClick", () => {
   )
   const button = screen.getByRole("button", { name: "Save changes" })
   expect(button).toHaveClass("btn", "btn-secondary")
+  button.focus()
+  expect(button).toHaveFocus()
   fireEvent.click(button)
   expect(onClick).toHaveBeenCalledOnce()
 })

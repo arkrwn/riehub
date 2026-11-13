@@ -12,6 +12,8 @@ test("marks the active item and reports selections", () => {
   const chat = screen.getByRole("button", { name: "Chat" })
   expect(chat).toHaveClass("active")
   expect(chat).toHaveAttribute("aria-current", "page")
+  chat.focus()
+  expect(chat).toHaveFocus()
   expect(screen.getByRole("button", { name: "Overview" })).not.toHaveClass("active")
   fireEvent.click(screen.getByRole("button", { name: "Overview" }))
   expect(onSelect).toHaveBeenCalledWith("overview")

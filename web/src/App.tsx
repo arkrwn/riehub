@@ -59,8 +59,7 @@ function TopBar() {
   )
 }
 
-function SignedInShell() {
-  const { theme, toggle } = useTheme()
+function SignedInShell({ theme, toggle }: { theme: Theme; toggle: () => void }) {
   return (
     <div className="app-shell">
       <Rail
@@ -112,6 +111,7 @@ function SignedOutShell() {
 }
 
 export function App() {
+  const { theme, toggle } = useTheme()
   return (
     <Routes>
       <Route element={<SignedOutShell />}>
@@ -120,7 +120,7 @@ export function App() {
         <Route path="/recover" element={<Recover />} />
         <Route path="/invite/:token" element={<AcceptInvite />} />
       </Route>
-      <Route element={<SignedInShell />}>
+      <Route element={<SignedInShell theme={theme} toggle={toggle} />}>
         <Route path="/" element={<Home />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

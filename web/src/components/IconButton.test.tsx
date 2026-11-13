@@ -9,6 +9,8 @@ test("exposes its label to assistive tech and fires onClick", () => {
     </IconButton>,
   )
   const button = screen.getByRole("button", { name: "Toggle theme" })
+  button.focus()
+  expect(button).toHaveFocus()
   fireEvent.click(button)
   expect(onClick).toHaveBeenCalledOnce()
 })
