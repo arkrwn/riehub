@@ -1,4 +1,44 @@
+@import "tailwindcss";
 @import "./tokens.css";
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-ink: var(--ink);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-lime: var(--lime);
+  --color-lime-strong: var(--lime-strong);
+  --color-ink-on-lime: var(--ink-on-lime);
+  --color-forest: var(--forest);
+  --color-good: var(--good);
+  --color-good-bg: var(--good-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --radius-page-shell: var(--radius-page);
+  --radius-card-token: var(--radius-card);
+  --radius-tile-token: var(--radius-tile);
+  --radius-control-token: var(--radius-control);
+  --spacing-token-1: var(--space-1);
+  --spacing-token-2: var(--space-2);
+  --spacing-token-3: var(--space-3);
+  --spacing-token-4: var(--space-4);
+  --spacing-token-5: var(--space-5);
+  --spacing-token-6: var(--space-6);
+  --spacing-token-7: var(--space-7);
+  --font-ui: var(--font-sans);
+  --text-greeting-token: var(--text-greeting);
+  --text-section-title-token: var(--text-section-title);
+  --text-card-title-token: var(--text-card-title);
+  --text-body-token: var(--text-body);
+  --text-small-token: var(--text-small);
+  --text-stat-token: var(--text-stat);
+}
 
 /* Self-hosted Inter variable font. Never loaded from another origin. */
 @font-face {
@@ -96,6 +136,15 @@ p {
   margin-top: auto;
 }
 
+.rail-pill.rail-middle {
+  margin-top: var(--space-3);
+}
+
+.rail-active {
+  background: var(--ink);
+  color: var(--ink-inverse);
+}
+
 /* Signed out pages centre a single card. */
 .auth-shell {
   min-height: 100vh;
@@ -172,7 +221,7 @@ p {
 
 .btn-primary {
   background: var(--lime);
-  color: var(--ink);
+  color: var(--ink-on-lime);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -476,6 +525,10 @@ p {
   .rail-pill.rail-bottom {
     margin-top: 0;
     margin-left: auto;
+  }
+
+  .rail-pill.rail-middle {
+    margin-top: 0;
   }
 
   .content-grid {

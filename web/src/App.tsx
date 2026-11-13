@@ -1,4 +1,4 @@
-import { CircleHelp, LogOut, Moon, Sun } from "lucide-react"
+import { CircleHelp, LayoutDashboard, LogOut, Moon, Sun } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Navigate, Outlet, Route, Routes } from "react-router"
 import { IconButton } from "./components/IconButton"
@@ -69,6 +69,11 @@ function SignedInShell({ theme, toggle }: { theme: Theme; toggle: () => void }) 
             onClick={toggle}
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </IconButton>
+        }
+        middle={
+          <IconButton label="Overview" className="rail-active">
+            <LayoutDashboard size={18} />
           </IconButton>
         }
         bottom={

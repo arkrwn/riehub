@@ -1,10 +1,11 @@
 import { render, screen } from "@testing-library/react"
 import { Rail } from "./Rail"
 
-test("renders the top and bottom slots inside labelled pills", () => {
+test("renders keyboard-accessible top, middle and bottom slots", () => {
   render(
     <Rail
       top={<button type="button">theme</button>}
+      middle={<button type="button">overview</button>}
       bottom={<button type="button">logout</button>}
     />,
   )
@@ -14,6 +15,10 @@ test("renders the top and bottom slots inside labelled pills", () => {
   expect(theme.parentElement).toHaveClass("rail-pill")
   theme.focus()
   expect(theme).toHaveFocus()
+  expect(screen.getByRole("button", { name: "overview" }).parentElement).toHaveClass(
+    "rail-pill",
+    "rail-middle",
+  )
   expect(screen.getByRole("button", { name: "logout" }).parentElement).toHaveClass(
     "rail-pill",
     "rail-bottom",

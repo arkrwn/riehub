@@ -65,13 +65,18 @@ web-test:
 web-lint:
 	(cd web && npm ci --ignore-scripts && npm run lint)
 
-# The committed document must match what `riehub openapi` prints. A
-# drift means the document or the binary is stale.
+# The committed OpenAPI document and generated TypeScript types must
+# match their generators.
 openapi-drift: web-build
 	cargo build -q -p riehub-server
 	@cargo run -q -p riehub-server -- openapi | diff docs/api/openapi.json - >/dev/null \
 		&& echo "openapi: no drift" \
 		|| { echo "openapi drift: run cargo run -p riehub-server -- openapi > docs/api/openapi.json"; exit 1; }
+	@tmp=$$(mktemp); trap 'rm -f "$$tmp"' EXIT; \
+		(cd web && npx openapi-typescript ../docs/api/openapi.json -o "$$tmp" >/dev/null) && \
+		diff -q web/src/api/types.ts "$$tmp" >/dev/null \
+		&& echo "openapi types: no drift" \
+		|| { echo "openapi type drift: run (cd web && npm run generate)"; exit 1; }
 
 # ---- stack: rust
 build: web-build
