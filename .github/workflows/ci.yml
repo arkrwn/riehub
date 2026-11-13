@@ -24,7 +24,17 @@ jobs:
         # Linux and macOS are the only supported platforms (ADR 0002).
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # Node.js 22 runs the web targets of `make check` (web spec,
+      # section 1: npm everywhere). npm is cached against the web
+      # lockfile.
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
       # rust-toolchain.toml pins the exact version and its components.
       - name: Install Rust
@@ -34,7 +44,7 @@ jobs:
         run: make tools
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo

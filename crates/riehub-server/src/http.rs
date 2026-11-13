@@ -238,18 +238,62 @@ fn slug(title: &str) -> String {
         .collect()
 }
 
+/// The router fallback (api spec, section 2, web spec, section 1).
+/// Unknown API paths answer 404 problem json. Every other unknown
+/// path serves the embedded web app: the file when it exists,
+/// `index.html` otherwise, so client-side routes work.
 async fn fallback_404(State(state): State<AppState>, req: Request) -> Response {
+    let path = req.uri().path();
     let request_id = req.extensions().get::<String>().cloned();
-    let mut response = problem_response(
-        &Error::NotFound("no such route".to_owned()),
-        request_id.as_deref(),
-    );
-    response.headers_mut().insert(
-        "x-request-id",
-        HeaderValue::from_str(request_id.as_deref().unwrap_or(""))
-            .unwrap_or(HeaderValue::from_static("")),
-    );
+    if is_api_path(path) {
+        let mut response = problem_response(
+            &Error::NotFound("no such route".to_owned()),
+            request_id.as_deref(),
+        );
+        response.headers_mut().insert(
+            "x-request-id",
+            HeaderValue::from_str(request_id.as_deref().unwrap_or(""))
+                .unwrap_or(HeaderValue::from_static("")),
+        );
+        return response;
+    }
     let _ = state;
+    serve_web_app(path, request_id.as_deref())
+}
+
+/// The path prefixes that always answer json, never the web app.
+fn is_api_path(path: &str) -> bool {
+    path.starts_with("/api") || path.starts_with("/v1") || path == "/healthz" || path == "/readyz"
+}
+
+/// One embedded web app file with its cache policy. HTML carries the
+/// CSP from the security spec, section 7, through the security header
+/// middleware. The index is `no-store`, hashed assets are immutable.
+fn serve_web_app(path: &str, request_id: Option<&str>) -> Response {
+    let Some((bytes, content_type, immutable)) = crate::web::serve(path) else {
+        return problem_response(
+            &Error::Unavailable("the web app is not built".to_owned()),
+            request_id,
+        );
+    };
+    let cache_control = if immutable {
+        "public, max-age=31536000, immutable"
+    } else {
+        "no-store, no-cache"
+    };
+    let body = axum::body::Body::from(bytes);
+    let mut response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, HeaderValue::from_static(content_type))
+        .header(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static(cache_control),
+        )
+        .body(body)
+        .unwrap_or_else(|_| problem_response(&Error::Internal(None), None));
+    if let Ok(value) = HeaderValue::from_str(request_id.unwrap_or("")) {
+        response.headers_mut().insert("x-request-id", value);
+    }
     response
 }
 

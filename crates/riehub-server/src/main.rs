@@ -18,6 +18,7 @@ enum Command {
     Init { config: Option<PathBuf> },
     Serve { config: Option<PathBuf> },
     Doctor,
+    Openapi,
     Audit(cli::AuditArgs),
 }
 
@@ -25,7 +26,7 @@ fn usage() -> ExitCode {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(
         err,
-        "usage: riehub [version] | init [--config <path>] | serve [--config <path>] | doctor | audit verify|head|export"
+        "usage: riehub [version] | init [--config <path>] | serve [--config <path>] | doctor | openapi | audit verify|head|export"
     );
     ExitCode::from(2)
 }
@@ -47,6 +48,12 @@ fn parse_args(args: &[String]) -> Result<Command, ()> {
                 return Err(());
             }
             Ok(Command::Doctor)
+        }
+        Some("openapi") => {
+            if args.len() != 1 {
+                return Err(());
+            }
+            Ok(Command::Openapi)
         }
         Some("audit") => Ok(Command::Audit(cli::parse_audit_args(&args[1..])?)),
         Some(_) => Err(()),
@@ -119,6 +126,7 @@ fn main() -> ExitCode {
             };
             rt.block_on(doctor())
         }
+        Command::Openapi => print_openapi(),
         Command::Audit(args) => {
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
@@ -126,6 +134,26 @@ fn main() -> ExitCode {
             };
             rt.block_on(cli::run_audit(&args))
         }
+    }
+}
+
+/// Prints the OpenAPI document of the current API surface as json on
+/// stdout (web spec, section 1). Fails when serialization fails.
+fn print_openapi() -> ExitCode {
+    let document = riehub_server::openapi::openapi_document();
+    let json = match document.to_pretty_json() {
+        Ok(json) => json,
+        Err(e) => {
+            let mut err = std::io::stderr().lock();
+            let _ = writeln!(err, "openapi: serialization failed ({e})");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut out = std::io::stdout().lock();
+    if writeln!(out, "{json}").is_ok() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 

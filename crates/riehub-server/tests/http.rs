@@ -196,7 +196,10 @@ async fn access_log_has_only_allowlisted_fields() {
 #[tokio::test]
 async fn unknown_route_is_404_problem_json() {
     let router = test_router(riehub_server::routes::TABLE, RouterInput::default());
-    let response = router.oneshot(get("/definitely/not/here")).await.unwrap();
+    let response = router
+        .oneshot(get("/api/v1/definitely/not/here"))
+        .await
+        .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     assert_eq!(
         response.headers().get("content-type").unwrap(),
@@ -211,6 +214,84 @@ async fn unknown_route_is_404_problem_json() {
     assert!(json["title"].is_string());
     assert!(json["detail"].is_string());
     assert!(json["request_id"].is_string());
+}
+
+#[tokio::test]
+async fn index_html_is_served_with_csp_and_no_store() {
+    let router = test_router(riehub_server::routes::TABLE, RouterInput::default());
+    let response = router.oneshot(get("/")).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers().clone();
+    assert_eq!(
+        headers.get("content-security-policy").map(|v| v.to_str().unwrap()),
+        Some(
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+        ),
+        "every html response carries the CSP of security spec, section 7"
+    );
+    assert_eq!(
+        headers.get("cache-control").map(|v| v.to_str().unwrap()),
+        Some("no-store, no-cache"),
+        "the index is never cached"
+    );
+    let content_type = headers
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        content_type.starts_with("text/html"),
+        "content-type is {content_type}"
+    );
+    let body = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
+    let html = String::from_utf8_lossy(&body);
+    assert!(html.contains("<!doctype html>"), "the served index is html");
+}
+
+/// The built app must run under the CSP (web spec, section 1): no
+/// inline script and no inline style. A plain filesystem scan of
+/// `web/dist/index.html`, whatever build is in place. The placeholder
+/// satisfies it, the real Vite build must too.
+#[test]
+fn built_app_has_no_inline_script_or_style() {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let dist = std::path::Path::new(manifest).join("../../web/dist");
+    let index = dist.join("index.html");
+    let html = std::fs::read_to_string(&index).unwrap_or_default();
+    assert!(
+        !html.is_empty(),
+        "web/dist/index.html must exist for the scan"
+    );
+    assert!(
+        !html.contains("<style"),
+        "the app must not carry an inline style element"
+    );
+    assert!(
+        !html.contains("style="),
+        "the app must not carry inline style attributes"
+    );
+    let mut rest = html.as_str();
+    while let Some(start) = rest.find("<script") {
+        let tag = &rest[start..];
+        let end = tag.find('>').map(|e| e + 1).unwrap_or(tag.len());
+        let tag = &tag[..end];
+        assert!(
+            tag.contains("src="),
+            "every script needs a src attribute, found: {tag}"
+        );
+        rest = &rest[start + tag.len()..];
+    }
+    let assets = std::fs::read_dir(dist.join("assets")).expect("built assets exist");
+    for asset in assets {
+        let asset = asset.expect("asset entry is readable").path();
+        let content = std::fs::read_to_string(&asset).unwrap_or_default();
+        assert!(
+            !content.contains("<style") && !content.contains("style="),
+            "{} must not contain inline styles",
+            asset.display()
+        );
+    }
 }
 
 #[test]

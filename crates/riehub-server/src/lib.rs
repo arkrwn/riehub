@@ -5,8 +5,10 @@
 pub mod cli;
 pub mod harden;
 pub mod http;
+pub mod openapi;
 pub mod routes;
 pub mod serve;
+pub mod web;
 
 /// The line `riehub version` prints.
 pub fn version_line() -> String {

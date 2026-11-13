@@ -1,0 +1,84 @@
+/*
+  Design tokens. Every value here comes from docs/spec/web.md section 2.
+  Light theme is the default, dark theme flips the surfaces and keeps
+  the accents.
+*/
+
+:root {
+  /* Colour */
+  --canvas: #F5F5F5;
+  --surface: #FFFFFF;
+  --subtle: #F3F4F3;
+  --ink: #1A1A18;
+  --ink-inverse: #FFFFFF;
+  --muted: #6B6F6B;
+  --faint: #9CA09C;
+  --line: #E7E8E6;
+  --lime: #A8EF3D;
+  --lime-strong: #8FDD22;
+  --forest: #14532D;
+  --hero-from: #3E9E3A;
+  --hero-to: #0D4A38;
+  --good: #1F9D57;
+  --good-bg: #E4F6EA;
+  --warn: #D9A21B;
+  --warn-bg: #FBF2D8;
+  --bad: #D93F45;
+  --bad-bg: #FCE9E9;
+
+  /* Radius */
+  --radius-page: 32px;
+  --radius-card: 24px;
+  --radius-tile: 16px;
+  --radius-control: 999px;
+  --radius-pill: 999px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Type */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --text-greeting: 600 44px/48px var(--font-sans);
+  --text-section-title: 600 22px/28px var(--font-sans);
+  --text-card-title: 500 18px/24px var(--font-sans);
+  --text-body: 400 15px/22px var(--font-sans);
+  --text-small: 400 13px/18px var(--font-sans);
+  --text-stat: 600 36px/40px var(--font-sans);
+
+  /* Controls */
+  --control-h: 48px;
+  --input-h: 44px;
+  --icon-btn-h: 44px;
+
+  /* Motion. Reduced motion turns every transition off. */
+  --motion: 150ms ease-out;
+}
+
+[data-theme="dark"] {
+  --canvas: #0F110F;
+  --surface: #181B18;
+  --subtle: #212521;
+  --ink: #F2F4F1;
+  --ink-inverse: #0F110F;
+  --muted: #A1A7A0;
+  --faint: #6F756E;
+  --line: #2A2F2A;
+  --good: #4ADE80;
+  --good-bg: #143021;
+  --warn: #FACC15;
+  --warn-bg: #33290B;
+  --bad: #F87171;
+  --bad-bg: #3A1517;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
+}

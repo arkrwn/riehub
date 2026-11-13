@@ -1,0 +1,484 @@
+@import "./tokens.css";
+
+/* Self-hosted Inter variable font. Never loaded from another origin. */
+@font-face {
+  font-family: "Inter";
+  src: url("../assets/fonts/InterVariable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font: var(--text-body);
+  font-family: var(--font-sans);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+/* Focus is a 2 px ink outline with 2 px offset on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+/* Layout: left rail, top bar, 12-column content grid capped at 1440. */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-5) var(--space-6);
+}
+
+.content-grid {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-5);
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.topbar {
+  max-width: 1440px;
+  margin: 0 auto var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.rail {
+  width: 56px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-5) 0;
+}
+
+.rail-pill {
+  width: 56px;
+  background: var(--surface);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.rail-pill.rail-bottom {
+  margin-top: auto;
+}
+
+/* Signed out pages centre a single card. */
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-5);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-fields {
+  gap: var(--space-3);
+}
+
+/* Logo pill. */
+.logo-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--ink-inverse);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+/* User pill. */
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px 6px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  background: var(--forest);
+  color: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* Buttons: 48 tall, pill radius, 150 ms ease-out on colour. */
+.btn {
+  height: var(--control-h);
+  padding: 0 var(--space-5);
+  border: none;
+  border-radius: var(--radius-control);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--motion), color var(--motion);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--lime-strong);
+}
+
+.btn-secondary {
+  background: var(--subtle);
+  color: var(--ink);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--line);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--subtle);
+}
+
+.btn-danger {
+  background: var(--bad);
+  color: var(--ink-inverse);
+}
+
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+/* Icon buttons: 44 by 44, pill radius. */
+.icon-btn {
+  width: var(--icon-btn-h);
+  height: var(--icon-btn-h);
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--subtle);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--motion);
+}
+
+.icon-btn:hover {
+  background: var(--line);
+}
+
+/* Pills. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pill-good {
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.pill-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.pill-bad {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+/* Nav pills: active item is a filled ink pill. */
+.nav-pills {
+  display: flex;
+  gap: var(--space-1);
+  background: var(--surface);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1);
+}
+
+.nav-pill {
+  height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--motion), color var(--motion);
+}
+
+.nav-pill:hover {
+  color: var(--ink);
+}
+
+.nav-pill.active {
+  background: var(--ink);
+  color: var(--ink-inverse);
+  font-weight: 600;
+}
+
+/* Card: colour separates it from the canvas, no shadow. */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Inputs: 44 tall, pill radius, subtle fill. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.input {
+  height: var(--input-h);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--subtle);
+  color: var(--ink);
+  transition: background var(--motion);
+}
+
+.input::placeholder {
+  color: var(--faint);
+}
+
+.input:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Dialog: simple overlay, no exotic focus trapping. */
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  z-index: 50;
+}
+
+.dialog {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: var(--space-5);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* Secret shown once. */
+.secret-value {
+  background: var(--subtle);
+  border-radius: var(--radius-tile);
+  padding: var(--space-3) var(--space-4);
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+/* Toast: dot plus word, colour is never the only signal. */
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--subtle);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.toast-good .toast-dot {
+  background: var(--good);
+}
+
+.toast-warn .toast-dot {
+  background: var(--warn);
+}
+
+.toast-bad .toast-dot,
+.toast-dot-bad {
+  background: var(--bad);
+}
+
+.toast-info .toast-dot {
+  background: var(--forest);
+}
+
+.toast-good {
+  background: var(--good-bg);
+}
+
+.toast-warn {
+  background: var(--warn-bg);
+}
+
+.toast-bad {
+  background: var(--bad-bg);
+}
+
+/* Empty and error states. */
+.empty-state,
+.error-state {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  padding: var(--space-7) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+
+/* Type utilities. */
+.greeting {
+  font: var(--text-greeting);
+}
+
+.section-title {
+  font: var(--text-section-title);
+}
+
+.card-title {
+  font: var(--text-card-title);
+}
+
+.stat-value {
+  font: var(--text-stat);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font: var(--text-small);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below 1024 px the rail becomes a bottom bar and cards stack. */
+@media (max-width: 1023px) {
+  .app-shell {
+    flex-direction: column-reverse;
+  }
+
+  .rail {
+    flex-direction: row;
+    width: 100%;
+    padding: 0 var(--space-4) var(--space-4);
+  }
+
+  .rail-pill {
+    flex-direction: row;
+    padding: 0 var(--space-2);
+  }
+
+  .rail-pill.rail-bottom {
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- React web app shell, the design token system and reusable account
+  components for setup, login, recovery and invite acceptance. The UI
+  is embedded in the server and the API types come from OpenAPI.
 - Account self-service in `riehub-identity` and the API: password
   change with re-wrapping, recovery through the armored key, recovery
   key rotation, and the admin reset with recovery-or-start-empty.
